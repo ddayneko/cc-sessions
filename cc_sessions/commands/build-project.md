@@ -1,0 +1,326 @@
+---
+allowed-tools: Bash(python3:*), Bash(echo:*), Bash(mkdir:*), Bash(cp:*), Task
+argument-hint: "create [name] | list [name?] | work [name] [step] | complete [name] [step] | status [name] | parse [name]"
+description: Manage build projects with implementation plans and step tracking
+---
+
+!`python3 -c "
+import json
+import sys
+import os
+from pathlib import Path
+from datetime import datetime
+
+# Parse arguments
+args = '$ARGUMENTS'.strip().split()
+if not args:
+    print('Usage: /build-project <command> [args...]')
+    print('Commands:')
+    print('  create [name]           - Initialize new build project')
+    print('  list [name?]            - Show all projects or steps for specific project')
+    print('  work [name] [step]      - Start working on specific step')
+    print('  complete [name] [step]  - Mark step as completed')
+    print('  status [name]           - Show project progress')
+    print('  parse [name]            - Re-parse plan files for changes')
+    sys.exit(0)
+
+command = args[0]
+project_dir = Path(os.environ.get('CLAUDE_PROJECT_DIR', '.')).resolve()
+build_projects_dir = project_dir / 'sessions' / 'build-projects'
+
+def ensure_build_projects_dir():
+    build_projects_dir.mkdir(parents=True, exist_ok=True)
+
+def get_project_path(name):
+    return build_projects_dir / name
+
+def get_project_state_path(name):
+    return get_project_path(name) / 'state.json'
+
+def load_project_state(name):
+    state_file = get_project_state_path(name)
+    if state_file.exists():
+        with open(state_file) as f:
+            return json.load(f)
+    return None
+
+def save_project_state(name, state):
+    state_file = get_project_state_path(name)
+    with open(state_file, 'w') as f:
+        json.dump(state, f, indent=2)
+
+def update_current_task(task_data):
+    task_file = project_dir / '.claude' / 'state' / 'current_task.json'
+    with open(task_file, 'w') as f:
+        json.dump(task_data, f, indent=2)
+
+if command == 'create':
+    if len(args) < 2:
+        print('Error: Project name required for create command')
+        sys.exit(1)
+    
+    name = args[1]
+    ensure_build_projects_dir()
+    project_path = get_project_path(name)
+    
+    if project_path.exists():
+        print(f'Error: Project {name} already exists')
+        sys.exit(1)
+    
+    # Create project structure
+    project_path.mkdir()
+    (project_path / 'plan').mkdir()
+    
+    # Copy template
+    template_source = Path(__file__).parent.parent / 'templates' / 'BUILD_PROJECT_TEMPLATE.md'
+    if template_source.exists():
+        import shutil
+        shutil.copy2(template_source, project_path / 'README.md')
+    
+    # Initialize state
+    state = {
+        'project': name,
+        'status': 'pending',
+        'created': datetime.now().strftime('%Y-%m-%d'),
+        'updated': datetime.now().strftime('%Y-%m-%d'),
+        'current_step': None,
+        'completed_steps': [],
+        'active_branch': None,
+        'plan_files': [],
+        'total_steps': 0,
+        'completion_percentage': 0.0,
+        'step_details': {}
+    }
+    save_project_state(name, state)
+    
+    print(f'✅ Build project {name} created successfully!')
+    print(f'Next steps:')
+    print(f'1. Add implementation plan files to: sessions/build-projects/{name}/plan/')
+    print(f'2. Run: /build-project parse {name}')
+    print(f'3. Start work: /build-project work {name} [step-number]')
+
+elif command == 'list':
+    ensure_build_projects_dir()
+    
+    if len(args) > 1:
+        # List steps for specific project
+        name = args[1]
+        state = load_project_state(name)
+        if not state:
+            print(f'Error: Project {name} not found')
+            sys.exit(1)
+        
+        print(f'🔨 Build Project: {name}')
+        print(f'Status: {state['status']}')
+        print(f'Progress: {state['completion_percentage']:.1f}% ({len(state['completed_steps'])}/{state['total_steps']} steps)')
+        print()
+        
+        if state['step_details']:
+            for step_num in sorted(state['step_details'].keys(), key=lambda x: tuple(map(int, x.split('.')))):
+                step = state['step_details'][step_num]
+                status_icon = '✅' if step.get('status') == 'completed' else ('🔄' if step.get('status') == 'in-progress' else '⏸️')
+                print(f'{status_icon} {step_num}: {step['title']} ({step['file']})')
+        else:
+            print('No steps found. Run /build-project parse {name} to scan plan files.')
+    
+    else:
+        # List all projects
+        projects = [d for d in build_projects_dir.iterdir() if d.is_dir()]
+        if not projects:
+            print('No build projects found.')
+            print('Create one with: /build-project create [name]')
+            sys.exit(0)
+        
+        print('🔨 Build Projects:')
+        print()
+        for project_path in sorted(projects):
+            name = project_path.name
+            state = load_project_state(name)
+            if state:
+                status_icon = '✅' if state['status'] == 'completed' else ('🔄' if state['status'] == 'active' else '⏸️')
+                print(f'{status_icon} {name} - {state['completion_percentage']:.1f}% complete ({state['status']})')
+            else:
+                print(f'❓ {name} - No state file')
+
+elif command == 'work':
+    if len(args) < 3:
+        print('Error: Project name and step number required')
+        print('Usage: /build-project work [name] [step]')
+        sys.exit(1)
+    
+    name, step = args[1], args[2]
+    state = load_project_state(name)
+    if not state:
+        print(f'Error: Project {name} not found')
+        sys.exit(1)
+    
+    if step not in state['step_details']:
+        print(f'Error: Step {step} not found in project {name}')
+        print('Available steps:')
+        for s in sorted(state['step_details'].keys()):
+            print(f'  {s}: {state['step_details'][s]['title']}')
+        sys.exit(1)
+    
+    step_info = state['step_details'][step]
+    branch_name = f'build-project/{name}/step-{step.replace('.', '-')}'
+    
+    # Update project state
+    state['current_step'] = step
+    state['status'] = 'active'
+    state['active_branch'] = branch_name
+    if step_info.get('status') != 'completed':
+        step_info['status'] = 'in-progress'
+        step_info['started_date'] = datetime.now().strftime('%Y-%m-%d')
+    state['updated'] = datetime.now().strftime('%Y-%m-%d')
+    save_project_state(name, state)
+    
+    # Update current task
+    task_data = {
+        'task': f'build-project:{name}:{step}',
+        'branch': branch_name,
+        'services': [],
+        'updated': datetime.now().strftime('%Y-%m-%d'),
+        'build_project': {
+            'project': name,
+            'step': step,
+            'step_title': step_info['title']
+        }
+    }
+    update_current_task(task_data)
+    
+    print(f'🔨 Starting work on step {step}: {step_info['title']}')
+    print(f'📁 File: {step_info['file']}')
+    print(f'🌿 Branch: {branch_name}')
+    print()
+    print('Implementation:')
+    print(step_info.get('implementation', 'No implementation details available'))
+    print()
+    if step_info.get('validation'):
+        print('Validation Criteria:')
+        for criterion in step_info['validation']:
+            print(f'- [ ] {criterion}')
+    print()
+    print(f'When complete, run: /build-project complete {name} {step}')
+
+elif command == 'complete':
+    if len(args) < 3:
+        print('Error: Project name and step number required')
+        print('Usage: /build-project complete [name] [step]')
+        sys.exit(1)
+    
+    name, step = args[1], args[2]
+    state = load_project_state(name)
+    if not state:
+        print(f'Error: Project {name} not found')
+        sys.exit(1)
+    
+    if step not in state['step_details']:
+        print(f'Error: Step {step} not found in project {name}')
+        sys.exit(1)
+    
+    step_info = state['step_details'][step]
+    
+    # Mark step as completed
+    step_info['status'] = 'completed'
+    step_info['completed_date'] = datetime.now().strftime('%Y-%m-%d')
+    
+    if step not in state['completed_steps']:
+        state['completed_steps'].append(step)
+    
+    # Update completion percentage
+    state['completion_percentage'] = (len(state['completed_steps']) / state['total_steps']) * 100 if state['total_steps'] > 0 else 0
+    
+    # Update project status
+    if len(state['completed_steps']) == state['total_steps']:
+        state['status'] = 'completed'
+    
+    state['updated'] = datetime.now().strftime('%Y-%m-%d')
+    save_project_state(name, state)
+    
+    print(f'✅ Step {step} completed: {step_info['title']}')
+    print(f'📊 Project progress: {state['completion_percentage']:.1f}% ({len(state['completed_steps'])}/{state['total_steps']} steps)')
+    
+    if state['status'] == 'completed':
+        print('🎉 Project completed!')
+    else:
+        # Suggest next steps
+        remaining = [s for s in state['step_details'] if state['step_details'][s].get('status') != 'completed']
+        if remaining:
+            next_step = sorted(remaining, key=lambda x: tuple(map(int, x.split('.'))))[0]
+            print(f'💡 Next suggested step: /build-project work {name} {next_step}')
+
+elif command == 'status':
+    if len(args) < 2:
+        print('Error: Project name required')
+        sys.exit(1)
+    
+    name = args[1]
+    state = load_project_state(name)
+    if not state:
+        print(f'Error: Project {name} not found')
+        sys.exit(1)
+    
+    print(f'🔨 Build Project Status: {name}')
+    print(f'📊 Progress: {state['completion_percentage']:.1f}% ({len(state['completed_steps'])}/{state['total_steps']} steps)')
+    print(f'🏷️ Status: {state['status']}')
+    print(f'📅 Created: {state['created']}')
+    print(f'📅 Updated: {state['updated']}')
+    
+    if state.get('current_step'):
+        current_step_info = state['step_details'][state['current_step']]
+        print(f'🔄 Current Step: {state['current_step']} - {current_step_info['title']}')
+    
+    if state.get('active_branch'):
+        print(f'🌿 Active Branch: {state['active_branch']}')
+    
+    print()
+    
+    # Show step breakdown
+    completed = [s for s in state['step_details'] if state['step_details'][s].get('status') == 'completed']
+    in_progress = [s for s in state['step_details'] if state['step_details'][s].get('status') == 'in-progress']
+    pending = [s for s in state['step_details'] if state['step_details'][s].get('status') not in ['completed', 'in-progress']]
+    
+    if completed:
+        print(f'✅ Completed Steps ({len(completed)}):')
+        for step in sorted(completed, key=lambda x: tuple(map(int, x.split('.')))):
+            step_info = state['step_details'][step]
+            print(f'  {step}: {step_info['title']}')
+    
+    if in_progress:
+        print(f'🔄 In Progress ({len(in_progress)}):')
+        for step in sorted(in_progress, key=lambda x: tuple(map(int, x.split('.')))):
+            step_info = state['step_details'][step]
+            print(f'  {step}: {step_info['title']}')
+    
+    if pending:
+        print(f'⏸️ Pending Steps ({len(pending)}):')
+        for step in sorted(pending, key=lambda x: tuple(map(int, x.split('.'))))[0:5]:
+            step_info = state['step_details'][step]
+            print(f'  {step}: {step_info['title']}')
+        if len(pending) > 5:
+            print(f'  ... and {len(pending) - 5} more')
+
+elif command == 'parse':
+    if len(args) < 2:
+        print('Error: Project name required')
+        sys.exit(1)
+    
+    name = args[1]
+    project_path = get_project_path(name)
+    if not project_path.exists():
+        print(f'Error: Project {name} not found')
+        sys.exit(1)
+    
+    print(f'🔍 Parsing build project: {name}')
+    print('Using build-project-parser agent for detailed parsing...')
+    
+    # This will be handled by the build-project-parser agent
+    # For now, just indicate that parsing is needed
+    print('Call the build-project-parser agent with the project path to complete parsing.')
+
+else:
+    print(f'Error: Unknown command {command}')
+    print('Available commands: create, list, work, complete, status, parse')
+    sys.exit(1)
+
+" && echo "Build project command completed successfully." || echo "Build project command failed. Check your arguments and try again."`

@@ -245,10 +245,19 @@ class SessionsInstaller:
         
         # Copy templates
         print(color("Installing templates...", Colors.CYAN))
-        template_file = self.package_dir / "templates/TEMPLATE.md"
-        if template_file.exists():
-            dest = self.project_root / "sessions/tasks/TEMPLATE.md"
-            shutil.copy2(template_file, dest)
+        templates_dir = self.package_dir / "templates"
+        if templates_dir.exists():
+            for template_file in templates_dir.glob("*.md"):
+                if template_file.name == "TEMPLATE.md":
+                    # Task template goes to sessions/tasks/
+                    dest = self.project_root / "sessions/tasks/TEMPLATE.md"
+                elif template_file.name == "BUILD_PROJECT_TEMPLATE.md":
+                    # Build project template goes to sessions/ for easier access
+                    dest = self.project_root / "sessions" / template_file.name
+                else:
+                    # Other templates go to sessions/ directory
+                    dest = self.project_root / "sessions" / template_file.name
+                shutil.copy2(template_file, dest)
         
         # Copy commands
         print(color("Installing commands...", Colors.CYAN))

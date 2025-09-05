@@ -287,10 +287,26 @@ async function copyFiles() {
   }
   
   console.log(color('Installing templates...', colors.cyan));
-  await fs.copyFile(
-    path.join(SCRIPT_DIR, 'cc_sessions/templates/TEMPLATE.md'),
-    path.join(PROJECT_ROOT, 'sessions/tasks/TEMPLATE.md')
-  );
+  const templateFiles = await fs.readdir(path.join(SCRIPT_DIR, 'cc_sessions/templates'));
+  for (const file of templateFiles) {
+    if (file.endsWith('.md')) {
+      let destPath;
+      if (file === 'TEMPLATE.md') {
+        // Task template goes to sessions/tasks/
+        destPath = path.join(PROJECT_ROOT, 'sessions/tasks/TEMPLATE.md');
+      } else if (file === 'BUILD_PROJECT_TEMPLATE.md') {
+        // Build project template goes to sessions/ for easier access
+        destPath = path.join(PROJECT_ROOT, 'sessions', file);
+      } else {
+        // Other templates go to sessions/ directory
+        destPath = path.join(PROJECT_ROOT, 'sessions', file);
+      }
+      await fs.copyFile(
+        path.join(SCRIPT_DIR, 'cc_sessions/templates', file),
+        destPath
+      );
+    }
+  }
   
   console.log(color('Installing commands...', colors.cyan));
   const commandFiles = await fs.readdir(path.join(SCRIPT_DIR, 'cc_sessions/commands'));
