@@ -62,3 +62,5 @@ docs/.doctrees
 *.tmp
 .tmp/
 tmp/
+/.claude
+/sessions
