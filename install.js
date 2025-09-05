@@ -112,7 +112,11 @@ const config = {
   trigger_phrases: ["make it so", "run that", "go ahead", "yert"],
   blocked_tools: ["Edit", "Write", "MultiEdit", "NotebookEdit"],
   task_detection: { enabled: true },
-  branch_enforcement: { enabled: true }
+  branch_enforcement: { enabled: true },
+  serena_mcp: { 
+    enabled: false,
+    auto_activate: true 
+  }
 };
 
 // Check if command exists
@@ -158,6 +162,60 @@ async function checkDependencies() {
       process.exit(1);
     }
   }
+}
+
+// Check for Serena MCP availability
+function checkSerenaMCP() {
+  const hasUv = commandExists('uv');
+  const hasClaude = commandExists('claude');
+  
+  return {
+    uv: hasUv,
+    claude: hasClaude,
+    available: hasUv && hasClaude
+  };
+}
+
+// Setup Serena MCP integration
+async function setupSerenaMCP() {
+  const serenaStatus = checkSerenaMCP();
+  
+  if (!serenaStatus.available) {
+    const missing = [];
+    if (!serenaStatus.uv) missing.push('uv (Python package manager)');
+    if (!serenaStatus.claude) missing.push('claude (Claude Code CLI)');
+    
+    console.log(color(`⚠️  Serena MCP requirements not met. Missing: ${missing.join(', ')}`, colors.yellow));
+    console.log(color('   Install with: curl -LsSf https://astral.sh/uv/install.sh | sh', colors.dim));
+    console.log(color('   Serena MCP features will be disabled but agents will gracefully fallback.', colors.dim));
+    return false;
+  }
+  
+  console.log(color('✓ Serena MCP requirements detected', colors.green));
+  
+  const installSerena = await question(color('  Install Serena MCP for enhanced code analysis? (y/n): ', colors.cyan));
+  
+  if (installSerena.toLowerCase() === 'y') {
+    try {
+      console.log(color('  Installing Serena MCP server...', colors.dim));
+      
+      // Add Serena MCP server to Claude Code
+      execSync(`claude mcp add serena uvx --from git+https://github.com/oraios/serena serena start-mcp-server`, { stdio: 'ignore' });
+      
+      console.log(color('  ✓ Serena MCP server configured', colors.green));
+      console.log(color('    Remember to activate your project: "Activate the project /path/to/project"', colors.dim));
+      
+      config.serena_mcp.enabled = true;
+      return true;
+      
+    } catch (error) {
+      console.log(color('  ⚠️ Serena MCP installation failed, continuing without it', colors.yellow));
+      console.log(color('    You can set it up manually later with: claude mcp add serena ...', colors.dim));
+      return false;
+    }
+  }
+  
+  return false;
 }
 
 // Create directory structure
@@ -810,6 +868,7 @@ async function install() {
     await installPythonDeps();
     await copyFiles();
     await installDaicCommand();
+    const serenaMCPInstalled = await setupSerenaMCP();
     const { statuslineInstalled } = await configure();
     await saveConfig(statuslineInstalled);
     await setupClaudeMd();
