@@ -121,11 +121,6 @@ const config = {
     enabled: false,
     auto_activate: true,
     memory_bank_root: ""
-  },
-  duckduckgo_mcp: {
-    enabled: false,
-    auto_activate: true,
-    rate_limit_enabled: true
   }
 };
 
@@ -143,6 +138,32 @@ function commandExists(command) {
     }
   } catch {
     return false;
+  }
+}
+
+// Get list of already installed MCP servers
+function getInstalledMCPServers() {
+  if (!commandExists('claude')) {
+    return new Set();
+  }
+  
+  try {
+    const result = execSync('claude mcp list', { encoding: 'utf-8' });
+    const installed = new Set();
+    const lines = result.split('\n');
+    
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+      if (lowerLine.includes('serena:')) {
+        installed.add('serena');
+      } else if (lowerLine.includes('memory-bank') || lowerLine.includes('memorybank')) {
+        installed.add('memory-bank');
+      }
+    }
+    
+    return installed;
+  } catch {
+    return new Set();
   }
 }
 
@@ -178,17 +199,25 @@ async function checkDependencies() {
 function checkSerenaMCP() {
   const hasUv = commandExists('uv');
   const hasClaude = commandExists('claude');
+  const installedServers = getInstalledMCPServers();
   
   return {
     uv: hasUv,
     claude: hasClaude,
-    available: hasUv && hasClaude
+    available: hasUv && hasClaude,
+    alreadyInstalled: installedServers.has('serena')
   };
 }
 
 // Setup Serena MCP integration
 async function setupSerenaMCP() {
   const serenaStatus = checkSerenaMCP();
+  
+  if (serenaStatus.alreadyInstalled) {
+    console.log(color('✓ Serena MCP already installed', colors.green));
+    config.serena_mcp.enabled = true;
+    return true;
+  }
   
   if (!serenaStatus.available) {
     const missing = [];
@@ -210,7 +239,7 @@ async function setupSerenaMCP() {
       console.log(color('  Installing Serena MCP server...', colors.dim));
       
       // Add Serena MCP server to Claude Code
-      execSync(`claude mcp add serena sh -c "uvx --from git+https://github.com/oraios/serena serena start-mcp-server"`, { stdio: 'ignore' });
+      execSync(`claude mcp add serena sh -c "uvx --from git+https://github.com/oraios/serena serena start-mcp-server"`, { stdio: 'inherit' });
       
       console.log(color('  ✓ Serena MCP server configured', colors.green));
       console.log(color('    Remember to activate your project: "Activate the project /path/to/project"', colors.dim));
@@ -232,17 +261,25 @@ async function setupSerenaMCP() {
 function checkMemoryBankMCP() {
   const hasNpx = commandExists('npx');
   const hasClaude = commandExists('claude');
+  const installedServers = getInstalledMCPServers();
   
   return {
     npx: hasNpx,
     claude: hasClaude,
-    available: hasNpx && hasClaude
+    available: hasNpx && hasClaude,
+    alreadyInstalled: installedServers.has('memory-bank')
   };
 }
 
 // Setup Memory Bank MCP integration
 async function setupMemoryBankMCP() {
   const memoryBankStatus = checkMemoryBankMCP();
+  
+  if (memoryBankStatus.alreadyInstalled) {
+    console.log(color('✓ Memory Bank MCP already installed', colors.green));
+    config.memory_bank_mcp.enabled = true;
+    return true;
+  }
   
   if (!memoryBankStatus.available) {
     const missing = [];
@@ -268,7 +305,7 @@ async function setupMemoryBankMCP() {
       await fs.mkdir(memoryBankRoot, { recursive: true });
       
       // Install Memory Bank MCP server using smithery
-      execSync('npx -y @smithery/cli install @alioshr/memory-bank-mcp --client claude', { stdio: 'ignore' });
+      execSync('npx -y @smithery/cli install @alioshr/memory-bank-mcp --client claude', { stdio: 'inherit' });
       
       console.log(color('  ✓ Memory Bank MCP server configured', colors.green));
       console.log(color(`    Memory bank root: ${memoryBankRoot}`, colors.dim));
@@ -288,71 +325,7 @@ async function setupMemoryBankMCP() {
   return false;
 }
 
-// Check DuckDuckGo MCP requirements
-function checkDuckDuckGoMCP() {
-  const hasNpx = commandExists('npx');
-  const hasUv = commandExists('uv');
-  const hasClaude = commandExists('claude');
-  
-  return {
-    npx: hasNpx,
-    uv: hasUv,
-    claude: hasClaude,
-    available: (hasNpx || hasUv) && hasClaude
-  };
-}
 
-// Setup DuckDuckGo MCP integration
-async function setupDuckDuckGoMCP() {
-  const duckduckgoStatus = checkDuckDuckGoMCP();
-  
-  if (!duckduckgoStatus.available) {
-    const missing = [];
-    if (!duckduckgoStatus.npx && !duckduckgoStatus.uv) missing.push('npx (Node.js) or uv (Python package manager)');
-    if (!duckduckgoStatus.claude) missing.push('claude (Claude Code CLI)');
-    
-    console.log(color(`⚠️  DuckDuckGo MCP requirements not met. Missing: ${missing.join(', ')}`, colors.yellow));
-    console.log(color('   Install Node.js for npx: https://nodejs.org/ OR uv: curl -LsSf https://astral.sh/uv/install.sh | sh', colors.dim));
-    console.log(color('   DuckDuckGo MCP features will be disabled but workflow continues normally.', colors.dim));
-    return false;
-  }
-  
-  console.log(color('✓ DuckDuckGo MCP requirements detected', colors.green));
-  
-  const installDuckDuckGo = await question(color('  Install DuckDuckGo MCP for web search and knowledge gathering? (y/n): ', colors.cyan));
-  
-  if (installDuckDuckGo.toLowerCase() === 'y') {
-    try {
-      console.log(color('  Installing DuckDuckGo MCP server...', colors.dim));
-      
-      let method;
-      // Try npx/smithery first, fall back to uv
-      if (duckduckgoStatus.npx) {
-        execSync('npx -y @smithery/cli install @nickclyde/duckduckgo-mcp-server --client claude', { stdio: 'ignore' });
-        method = 'Smithery (npx)';
-      } else if (duckduckgoStatus.uv) {
-        execSync('claude mcp add ddg-search uvx duckduckgo-mcp-server', { stdio: 'ignore' });
-        method = 'uv';
-      } else {
-        throw new Error('No installation method available');
-      }
-      
-      console.log(color('  ✓ DuckDuckGo MCP server configured', colors.green));
-      console.log(color(`    Installation method: ${method}`, colors.dim));
-      console.log(color('    Note: Rate limits apply (30 searches/min, 20 fetches/min)', colors.dim));
-      
-      config.duckduckgo_mcp.enabled = true;
-      return true;
-      
-    } catch (error) {
-      console.log(color('  ⚠️ DuckDuckGo MCP installation failed, continuing without it', colors.yellow));
-      console.log(color('    You can set it up manually later with: npx -y @smithery/cli install @nickclyde/duckduckgo-mcp-server --client claude', colors.dim));
-      return false;
-    }
-  }
-  
-  return false;
-}
 
 // Create directory structure
 async function createDirectories() {
@@ -378,7 +351,7 @@ async function installPythonDeps() {
   console.log(color('Installing Python dependencies...', colors.cyan));
   try {
     const pipCommand = commandExists('pip3') ? 'pip3' : 'pip';
-    execSync(`${pipCommand} install tiktoken --quiet`, { stdio: 'ignore' });
+    execSync(`${pipCommand} install tiktoken --quiet`, { stdio: 'inherit' });
   } catch (error) {
     console.log(color('⚠️  Could not install tiktoken. You may need to install it manually.', colors.yellow));
   }
@@ -1032,7 +1005,6 @@ async function install() {
     await installDaicCommand();
     const serenaMCPInstalled = await setupSerenaMCP();
     const memoryBankMCPInstalled = await setupMemoryBankMCP();
-    const duckduckgoMCPInstalled = await setupDuckDuckGoMCP();
     const { statuslineInstalled } = await configure();
     await saveConfig(statuslineInstalled);
     await setupClaudeMd();

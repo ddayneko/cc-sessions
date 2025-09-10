@@ -1,7 +1,7 @@
 ---
 name: context-gathering
 description: Use when creating a new task OR when starting/switching to a task that lacks a context manifest. ALWAYS provide the task file path so the agent can read it and update it directly with the context manifest. Skip if task file already contains "Context Manifest" section.
-tools: Read, Glob, Grep, LS, Bash, Edit, MultiEdit, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__get_symbol_definition, mcp__serena__list_symbols, mcp__memory_bank__read_file, mcp__memory_bank__write_file, mcp__memory_bank__update_file, mcp__memory_bank__list_projects, mcp__memory_bank__list_files, mcp__duckduckgo__search, mcp__duckduckgo__fetch_content
+tools: Read, Glob, Grep, LS, Bash, Edit, MultiEdit, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__get_symbol_definition, mcp__serena__list_symbols, mcp__memory_bank__read_file, mcp__memory_bank__write_file, mcp__memory_bank__update_file, mcp__memory_bank__list_projects, mcp__memory_bank__list_files
 ---
 
 # Context-Gathering Agent
@@ -29,11 +29,8 @@ You are part of a sessions-based task management system. A new task has just bee
 4. **Persistent Context**: Use `list_projects()` and `list_files(project)` to check for existing context memory
 5. **Historical Context**: Use `read_file(project, context_file)` to retrieve previous analysis and decisions
 6. **Document Alignment**: Use `read_file(project, "PRD.md")` and `read_file(project, "FSD.md")` for requirements validation
-7. **External Knowledge**: Use `search("technology patterns best practices")` to gather current industry standards
-8. **Technical Research**: Use `search("framework_name common issues troubleshooting")` for known problems and solutions
-9. **Content Analysis**: Use `fetch_content(documentation_url)` to retrieve specific technical documentation
-10. **Cross-Reference**: Use semantic findings to guide targeted text-based and web research
-11. **Context Preservation**: Use `write_file(project, "task_context.md")` to preserve comprehensive analysis including external research
+7. **Cross-Reference**: Use semantic findings to guide targeted text-based research
+8. **Context Preservation**: Use `write_file(project, "task_context.md")` to preserve comprehensive analysis
 
 **Option B: Enhanced Semantic Analysis (If Only Serena MCP Available)**
 1. **Symbol Discovery**: Use `find_symbol("target_component")` to locate exact definitions
@@ -56,12 +53,10 @@ Hunt down using Grep/Glob/Read:
 **Hybrid Approach (Recommended When MCP Tools Available):**
 - Check Memory Bank for existing project context and requirements documents
 - Use semantic analysis for precise component discovery and dependency mapping
-- Research external knowledge with DuckDuckGo search for current best practices and solutions
 - Validate proposed changes against PRD/FSD stored in Memory Bank
 - Expand with text search for business logic, configuration, and error handling
-- Fetch relevant technical documentation using DuckDuckGo content retrieval
-- Cross-validate findings between semantic, persistent, and web-based approaches
-- Preserve comprehensive context analysis including external research in Memory Bank for future sessions
+- Cross-validate findings between semantic and persistent approaches
+- Preserve comprehensive context analysis in Memory Bank for future sessions
 
 Read files completely. Trace call paths. Understand the full architecture.
 

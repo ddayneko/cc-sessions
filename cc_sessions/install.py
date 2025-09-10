@@ -97,11 +97,6 @@ class SessionsInstaller:
                 "auto_activate": True,
                 "memory_bank_root": ""
             },
-            "duckduckgo_mcp": {
-                "enabled": False,
-                "auto_activate": True,
-                "rate_limit_enabled": True
-            },
             "document_governance": {
                 "enabled": False,
                 "auto_context_retention": True,
@@ -152,20 +147,45 @@ class SessionsInstaller:
             if response.lower() != 'y':
                 sys.exit(1)
     
+    def get_installed_mcp_servers(self) -> set:
+        """Get list of already installed MCP servers"""
+        if not command_exists("claude"):
+            return set()
+        
+        try:
+            result = subprocess.run(["claude", "mcp", "list"], 
+                                  capture_output=True, text=True, check=True)
+            installed = set()
+            for line in result.stdout.split('\n'):
+                if 'serena:' in line.lower():
+                    installed.add('serena')
+                elif 'memory-bank' in line.lower() or 'memorybank' in line.lower():
+                    installed.add('memory-bank')
+            return installed
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return set()
+    
     def check_serena_mcp(self) -> dict:
         """Check for Serena MCP availability"""
         has_uv = command_exists("uv")
         has_claude = command_exists("claude")
+        installed_servers = self.get_installed_mcp_servers()
         
         return {
             "uv": has_uv,
             "claude": has_claude,
-            "available": has_uv and has_claude
+            "available": has_uv and has_claude,
+            "already_installed": "serena" in installed_servers
         }
     
     def setup_serena_mcp(self) -> bool:
         """Setup Serena MCP integration"""
         serena_status = self.check_serena_mcp()
+        
+        if serena_status["already_installed"]:
+            print(color("✓ Serena MCP already installed", Colors.GREEN))
+            self.config["serena_mcp"]["enabled"] = True
+            return True
         
         if not serena_status["available"]:
             missing = []
@@ -191,7 +211,7 @@ class SessionsInstaller:
                 subprocess.run([
                     "claude", "mcp", "add", "serena", 
                     "sh", "-c", "uvx --from git+https://github.com/oraios/serena serena start-mcp-server"
-                ], check=True, capture_output=True)
+                ], check=True)
                 
                 print(color("  ✓ Serena MCP server configured", Colors.GREEN))
                 print(color("    Remember to activate your project: \"Activate the project /path/to/project\"", Colors.DIM))
@@ -210,16 +230,23 @@ class SessionsInstaller:
         """Check for Memory Bank MCP availability"""
         has_npx = command_exists("npx")
         has_claude = command_exists("claude")
+        installed_servers = self.get_installed_mcp_servers()
         
         return {
             "npx": has_npx,
             "claude": has_claude,
-            "available": has_npx and has_claude
+            "available": has_npx and has_claude,
+            "already_installed": "memory-bank" in installed_servers
         }
     
     def setup_memory_bank_mcp(self) -> bool:
         """Setup Memory Bank MCP integration"""
         memory_bank_status = self.check_memory_bank_mcp()
+        
+        if memory_bank_status["already_installed"]:
+            print(color("✓ Memory Bank MCP already installed", Colors.GREEN))
+            self.config["memory_bank_mcp"]["enabled"] = True
+            return True
         
         if not memory_bank_status["available"]:
             missing = []
@@ -249,7 +276,7 @@ class SessionsInstaller:
                 subprocess.run([
                     "npx", "-y", "@smithery/cli", "install", 
                     "@alioshr/memory-bank-mcp", "--client", "claude"
-                ], check=True, capture_output=True)
+                ], check=True)
                 
                 print(color("  ✓ Memory Bank MCP server configured", Colors.GREEN))
                 print(color(f"    Memory bank root: {memory_bank_root}", Colors.DIM))
@@ -266,72 +293,6 @@ class SessionsInstaller:
         
         return False
 
-    def check_duckduckgo_mcp(self) -> dict:
-        """Check for DuckDuckGo MCP availability"""
-        has_npx = command_exists("npx")
-        has_uv = command_exists("uv")
-        has_claude = command_exists("claude")
-        
-        return {
-            "npx": has_npx,
-            "uv": has_uv,
-            "claude": has_claude,
-            "available": (has_npx or has_uv) and has_claude
-        }
-    
-    def setup_duckduckgo_mcp(self) -> bool:
-        """Setup DuckDuckGo MCP integration"""
-        duckduckgo_status = self.check_duckduckgo_mcp()
-        
-        if not duckduckgo_status["available"]:
-            missing = []
-            if not duckduckgo_status["npx"] and not duckduckgo_status["uv"]:
-                missing.append("npx (Node.js) or uv (Python package manager)")
-            if not duckduckgo_status["claude"]:
-                missing.append("claude (Claude Code CLI)")
-            
-            print(color(f"⚠️  DuckDuckGo MCP requirements not met. Missing: {', '.join(missing)}", Colors.YELLOW))
-            print(color("   Install Node.js for npx: https://nodejs.org/ OR uv: curl -LsSf https://astral.sh/uv/install.sh | sh", Colors.DIM))
-            print(color("   DuckDuckGo MCP features will be disabled but workflow continues normally.", Colors.DIM))
-            return False
-        
-        print(color("✓ DuckDuckGo MCP requirements detected", Colors.GREEN))
-        
-        response = input(color("  Install DuckDuckGo MCP for web search and knowledge gathering? (y/n): ", Colors.CYAN))
-        
-        if response.lower() == 'y':
-            try:
-                print(color("  Installing DuckDuckGo MCP server...", Colors.DIM))
-                
-                # Try npx/smithery first, fall back to uv
-                if duckduckgo_status["npx"]:
-                    subprocess.run([
-                        "npx", "-y", "@smithery/cli", "install", 
-                        "@nickclyde/duckduckgo-mcp-server", "--client", "claude"
-                    ], check=True, capture_output=True)
-                    method = "Smithery (npx)"
-                elif duckduckgo_status["uv"]:
-                    subprocess.run([
-                        "claude", "mcp", "add", "ddg-search",
-                        "uvx", "duckduckgo-mcp-server"
-                    ], check=True, capture_output=True)
-                    method = "uv"
-                else:
-                    raise subprocess.CalledProcessError(1, "No installation method available")
-                
-                print(color("  ✓ DuckDuckGo MCP server configured", Colors.GREEN))
-                print(color(f"    Installation method: {method}", Colors.DIM))
-                print(color("    Note: Rate limits apply (30 searches/min, 20 fetches/min)", Colors.DIM))
-                
-                self.config["duckduckgo_mcp"]["enabled"] = True
-                return True
-                
-            except subprocess.CalledProcessError:
-                print(color("  ⚠️ DuckDuckGo MCP installation failed, continuing without it", Colors.YELLOW))
-                print(color("    You can set it up manually later with: npx -y @smithery/cli install @nickclyde/duckduckgo-mcp-server --client claude", Colors.DIM))
-                return False
-        
-        return False
     
     def create_directories(self) -> None:
         """Create necessary directory structure"""
@@ -830,7 +791,6 @@ class SessionsInstaller:
             self.install_daic_command()
             serena_mcp_installed = self.setup_serena_mcp()
             memory_bank_mcp_installed = self.setup_memory_bank_mcp()
-            duckduckgo_mcp_installed = self.setup_duckduckgo_mcp()
             self.configure()
             self.save_config()
             self.setup_claude_md()
