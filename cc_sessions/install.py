@@ -87,7 +87,11 @@ class SessionsInstaller:
             "trigger_phrases": ["make it so", "run that", "go ahead", "yert"],
             "blocked_tools": ["Edit", "Write", "MultiEdit", "NotebookEdit"],
             "task_detection": {"enabled": True},
-            "branch_enforcement": {"enabled": True}
+            "branch_enforcement": {"enabled": True},
+            "serena_mcp": {
+                "enabled": False,
+                "auto_activate": True
+            }
         }
     
     def detect_project_directory(self) -> Path:
@@ -127,6 +131,61 @@ class SessionsInstaller:
             response = input("Continue anyway? (y/n): ")
             if response.lower() != 'y':
                 sys.exit(1)
+    
+    def check_serena_mcp(self) -> dict:
+        """Check for Serena MCP availability"""
+        has_uv = command_exists("uv")
+        has_claude = command_exists("claude")
+        
+        return {
+            "uv": has_uv,
+            "claude": has_claude,
+            "available": has_uv and has_claude
+        }
+    
+    def setup_serena_mcp(self) -> bool:
+        """Setup Serena MCP integration"""
+        serena_status = self.check_serena_mcp()
+        
+        if not serena_status["available"]:
+            missing = []
+            if not serena_status["uv"]:
+                missing.append("uv (Python package manager)")
+            if not serena_status["claude"]:
+                missing.append("claude (Claude Code CLI)")
+            
+            print(color(f"⚠️  Serena MCP requirements not met. Missing: {', '.join(missing)}", Colors.YELLOW))
+            print(color("   Install with: curl -LsSf https://astral.sh/uv/install.sh | sh", Colors.DIM))
+            print(color("   Serena MCP features will be disabled but agents will gracefully fallback.", Colors.DIM))
+            return False
+        
+        print(color("✓ Serena MCP requirements detected", Colors.GREEN))
+        
+        response = input(color("  Install Serena MCP for enhanced code analysis? (y/n): ", Colors.CYAN))
+        
+        if response.lower() == 'y':
+            try:
+                print(color("  Installing Serena MCP server...", Colors.DIM))
+                
+                # Add Serena MCP server to Claude Code
+                subprocess.run([
+                    "claude", "mcp", "add", "serena", 
+                    "uvx", "--from", "git+https://github.com/oraios/serena", 
+                    "serena", "start-mcp-server"
+                ], check=True, capture_output=True)
+                
+                print(color("  ✓ Serena MCP server configured", Colors.GREEN))
+                print(color("    Remember to activate your project: \"Activate the project /path/to/project\"", Colors.DIM))
+                
+                self.config["serena_mcp"]["enabled"] = True
+                return True
+                
+            except subprocess.CalledProcessError:
+                print(color("  ⚠️ Serena MCP installation failed, continuing without it", Colors.YELLOW))
+                print(color("    You can set it up manually later with: claude mcp add serena ...", Colors.DIM))
+                return False
+        
+        return False
     
     def create_directories(self) -> None:
         """Create necessary directory structure"""
@@ -186,10 +245,19 @@ class SessionsInstaller:
         
         # Copy templates
         print(color("Installing templates...", Colors.CYAN))
-        template_file = self.package_dir / "templates/TEMPLATE.md"
-        if template_file.exists():
-            dest = self.project_root / "sessions/tasks/TEMPLATE.md"
-            shutil.copy2(template_file, dest)
+        templates_dir = self.package_dir / "templates"
+        if templates_dir.exists():
+            for template_file in templates_dir.glob("*.md"):
+                if template_file.name == "TEMPLATE.md":
+                    # Task template goes to sessions/tasks/
+                    dest = self.project_root / "sessions/tasks/TEMPLATE.md"
+                elif template_file.name == "BUILD_PROJECT_TEMPLATE.md":
+                    # Build project template goes to sessions/ for easier access
+                    dest = self.project_root / "sessions" / template_file.name
+                else:
+                    # Other templates go to sessions/ directory
+                    dest = self.project_root / "sessions" / template_file.name
+                shutil.copy2(template_file, dest)
         
         # Copy commands
         print(color("Installing commands...", Colors.CYAN))
@@ -604,6 +672,7 @@ class SessionsInstaller:
             self.install_python_deps()
             self.copy_files()
             self.install_daic_command()
+            serena_mcp_installed = self.setup_serena_mcp()
             self.configure()
             self.save_config()
             self.setup_claude_md()

@@ -1,7 +1,7 @@
 ---
 name: context-gathering
 description: Use when creating a new task OR when starting/switching to a task that lacks a context manifest. ALWAYS provide the task file path so the agent can read it and update it directly with the context manifest. Skip if task file already contains "Context Manifest" section.
-tools: Read, Glob, Grep, LS, Bash, Edit, MultiEdit
+tools: Read, Glob, Grep, LS, Bash, Edit, MultiEdit, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__get_symbol_definition, mcp__serena__list_symbols
 ---
 
 # Context-Gathering Agent
@@ -20,8 +20,17 @@ You are part of a sessions-based task management system. A new task has just bee
 - Identify ALL components, modules, and configs that will be involved
 - Include ANYTHING tangentially relevant - better to over-include
 
-### Step 2: Research Everything (SPARE NO TOKENS)
-Hunt down:
+### Step 2: Research Everything (SEMANTIC + TEXT ANALYSIS)
+
+**Option A: Enhanced Semantic Analysis (If Serena MCP Available)**
+1. **Symbol Discovery**: Use `find_symbol("target_component")` to locate exact definitions
+2. **Dependency Mapping**: Use `find_referencing_symbols("target_component")` to find all dependencies
+3. **Architecture Analysis**: Use `list_symbols(file_path)` to understand module boundaries  
+4. **Cross-Reference**: Use semantic findings to guide targeted text-based research
+5. **Validation**: Verify semantic analysis with broader contextual research
+
+**Option B: Traditional Text Analysis (Always Available as Fallback)**
+Hunt down using Grep/Glob/Read:
 - Every component/module that will be touched
 - Every component that communicates with those components  
 - Configuration files and environment variables
@@ -30,6 +39,12 @@ Hunt down:
 - Authentication and authorization flows
 - Error handling patterns
 - Any existing similar implementations
+
+**Hybrid Approach (Recommended When Serena Available):**
+- Start with semantic analysis for precise component discovery
+- Use dependency mapping to understand architectural relationships  
+- Expand with text search for business logic, configuration, and error handling
+- Cross-validate findings between both approaches for comprehensive understanding
 
 Read files completely. Trace call paths. Understand the full architecture.
 
@@ -47,20 +62,21 @@ Write VERBOSE, COMPREHENSIVE paragraphs explaining:
 
 **How It Currently Works:**
 - Start from user action or API call
-- Trace through EVERY component step-by-step
+- Trace through EVERY component step-by-step (use semantic analysis to map exact call hierarchies)
 - Explain data transformations at each stage
-- Document WHY it works this way (architectural decisions)
-- Include actual code snippets for critical logic
+- Document WHY it works this way (architectural decisions revealed through symbol relationships)
+- Include actual code snippets for critical logic (get precise definitions via `get_symbol_definition`)
 - Explain persistence: database operations, caching patterns (with actual key/query structures)
 - Detail error handling: what happens when things fail
 - Note assumptions and constraints
+- **Leverage semantic analysis**: Use dependency mapping to understand true architectural relationships vs. text-based assumptions
 
 **For New Features - What Needs to Connect:**
-- Which existing systems will be impacted
+- Which existing systems will be impacted (use `find_referencing_symbols` for impact analysis)
 - How current flows need modification  
-- Where your new code will hook in
-- What patterns you must follow
-- What assumptions might break
+- Where your new code will hook in (identify exact integration points through symbol analysis)
+- What patterns you must follow (understand existing patterns through semantic structure analysis)
+- What assumptions might break (validate assumptions against actual symbol relationships)
 
 ### Technical Reference Section (AFTER narrative)
 Include actual:

@@ -41,6 +41,15 @@ dependencies = [
     "tiktoken>=0.5.0",
 ]
 
+[project.optional-dependencies]
+serena = [
+    # Serena MCP integration requires external tools:
+    # - uv: curl -LsSf https://astral.sh/uv/install.sh | sh
+    # - claude: Claude Code CLI  
+    # - serena server: claude mcp add serena uvx --from git+https://github.com/oraios/serena serena start-mcp-server
+    # No additional pip dependencies required for core functionality
+]
+
 [project.urls]
 Homepage = "https://github.com/GWUDCAP/cc-sessions"
 Documentation = "https://github.com/GWUDCAP/cc-sessions#readme"
