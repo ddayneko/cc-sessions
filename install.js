@@ -121,6 +121,21 @@ const config = {
     enabled: false,
     auto_activate: true,
     memory_bank_root: ""
+  },
+  github_mcp: {
+    enabled: false,
+    auto_activate: true,
+    requires_pat: true
+  },
+  storybook_mcp: {
+    enabled: false,
+    auto_activate: true,
+    storybook_url: ""
+  },
+  playwright_mcp: {
+    enabled: false,
+    auto_activate: true,
+    browser_automation: true
   }
 };
 
@@ -158,6 +173,12 @@ function getInstalledMCPServers() {
         installed.add('serena');
       } else if (lowerLine.includes('memory-bank') || lowerLine.includes('memorybank')) {
         installed.add('memory-bank');
+      } else if (lowerLine.includes('github-mcp') || lowerLine.includes('github_mcp')) {
+        installed.add('github');
+      } else if (lowerLine.includes('storybook-mcp') || lowerLine.includes('storybook')) {
+        installed.add('storybook');
+      } else if (lowerLine.includes('playwright-mcp') || lowerLine.includes('playwright')) {
+        installed.add('playwright');
       }
     }
     
@@ -325,7 +346,196 @@ async function setupMemoryBankMCP() {
   return false;
 }
 
+// Check for GitHub MCP availability
+function checkGitHubMCP() {
+  const hasDocker = commandExists('docker');
+  const hasClaude = commandExists('claude');
+  const installedServers = getInstalledMCPServers();
+  
+  return {
+    docker: hasDocker,
+    claude: hasClaude,
+    available: hasDocker && hasClaude,
+    alreadyInstalled: installedServers.has('github')
+  };
+}
 
+// Setup GitHub MCP integration
+async function setupGitHubMCP() {
+  const githubStatus = checkGitHubMCP();
+  
+  if (githubStatus.alreadyInstalled) {
+    console.log(color('✓ GitHub MCP already installed', colors.green));
+    config.github_mcp.enabled = true;
+    return true;
+  }
+  
+  if (!githubStatus.available) {
+    const missing = [];
+    if (!githubStatus.docker) missing.push('docker (container runtime)');
+    if (!githubStatus.claude) missing.push('claude (Claude Code CLI)');
+    
+    console.log(color(`⚠️  GitHub MCP requirements not met. Missing: ${missing.join(', ')}`, colors.yellow));
+    console.log(color('   Install Docker: https://docs.docker.com/get-docker/', colors.dim));
+    console.log(color('   GitHub MCP features will be disabled but workflow continues normally.', colors.dim));
+    return false;
+  }
+  
+  console.log(color('✓ GitHub MCP requirements detected', colors.green));
+  
+  const installGitHub = await question(color('  Install GitHub MCP for repository management and automation? (y/n): ', colors.cyan));
+  
+  if (installGitHub.toLowerCase() === 'y') {
+    try {
+      console.log(color('  Installing GitHub MCP server...', colors.dim));
+      console.log(color('  Note: You will need a GitHub Personal Access Token to use this server', colors.yellow));
+      console.log(color('  Create one at: https://github.com/settings/tokens', colors.dim));
+      console.log(color('  Recommended scopes: repo, read:packages, read:org', colors.dim));
+      
+      // Add GitHub MCP server to Claude Code using Docker
+      execSync(`claude mcp add github docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server`, { stdio: 'inherit' });
+      
+      console.log(color('  ✓ GitHub MCP server configured', colors.green));
+      console.log(color('    Remember to set GITHUB_PERSONAL_ACCESS_TOKEN environment variable', colors.dim));
+      
+      config.github_mcp.enabled = true;
+      return true;
+      
+    } catch (error) {
+      console.log(color('  ⚠️ GitHub MCP installation failed, continuing without it', colors.yellow));
+      console.log(color('    You can set it up manually later with Docker', colors.dim));
+      return false;
+    }
+  }
+  
+  return false;
+}
+
+// Check for Storybook MCP availability
+function checkStorybookMCP() {
+  const hasNpx = commandExists('npx');
+  const hasClaude = commandExists('claude');
+  const installedServers = getInstalledMCPServers();
+  
+  return {
+    npx: hasNpx,
+    claude: hasClaude,
+    available: hasNpx && hasClaude,
+    alreadyInstalled: installedServers.has('storybook')
+  };
+}
+
+// Setup Storybook MCP integration
+async function setupStorybookMCP() {
+  const storybookStatus = checkStorybookMCP();
+  
+  if (storybookStatus.alreadyInstalled) {
+    console.log(color('✓ Storybook MCP already installed', colors.green));
+    config.storybook_mcp.enabled = true;
+    return true;
+  }
+  
+  if (!storybookStatus.available) {
+    const missing = [];
+    if (!storybookStatus.npx) missing.push('npx (Node.js package runner)');
+    if (!storybookStatus.claude) missing.push('claude (Claude Code CLI)');
+    
+    console.log(color(`⚠️  Storybook MCP requirements not met. Missing: ${missing.join(', ')}`, colors.yellow));
+    console.log(color('   Install Node.js to get npx: https://nodejs.org/', colors.dim));
+    console.log(color('   Storybook MCP features will be disabled but workflow continues normally.', colors.dim));
+    return false;
+  }
+  
+  console.log(color('✓ Storybook MCP requirements detected', colors.green));
+  
+  const installStorybook = await question(color('  Install Storybook MCP for component development workflows? (y/n): ', colors.cyan));
+  
+  if (installStorybook.toLowerCase() === 'y') {
+    try {
+      console.log(color('  Installing Storybook MCP server...', colors.dim));
+      console.log(color('  Note: You will need to provide STORYBOOK_URL pointing to your Storybook index.json', colors.yellow));
+      
+      // Add Storybook MCP server to Claude Code
+      execSync('claude mcp add storybook npx -y storybook-mcp', { stdio: 'inherit' });
+      
+      console.log(color('  ✓ Storybook MCP server configured', colors.green));
+      console.log(color('    Remember to set STORYBOOK_URL environment variable', colors.dim));
+      console.log(color('    Example: STORYBOOK_URL=http://localhost:6006/index.json', colors.dim));
+      
+      config.storybook_mcp.enabled = true;
+      return true;
+      
+    } catch (error) {
+      console.log(color('  ⚠️ Storybook MCP installation failed, continuing without it', colors.yellow));
+      console.log(color('    You can set it up manually later with: npx storybook-mcp', colors.dim));
+      return false;
+    }
+  }
+  
+  return false;
+}
+
+// Check for Playwright MCP availability
+function checkPlaywrightMCP() {
+  const hasNpx = commandExists('npx');
+  const hasClaude = commandExists('claude');
+  const installedServers = getInstalledMCPServers();
+  
+  return {
+    npx: hasNpx,
+    claude: hasClaude,
+    available: hasNpx && hasClaude,
+    alreadyInstalled: installedServers.has('playwright')
+  };
+}
+
+// Setup Playwright MCP integration
+async function setupPlaywrightMCP() {
+  const playwrightStatus = checkPlaywrightMCP();
+  
+  if (playwrightStatus.alreadyInstalled) {
+    console.log(color('✓ Playwright MCP already installed', colors.green));
+    config.playwright_mcp.enabled = true;
+    return true;
+  }
+  
+  if (!playwrightStatus.available) {
+    const missing = [];
+    if (!playwrightStatus.npx) missing.push('npx (Node.js package runner)');
+    if (!playwrightStatus.claude) missing.push('claude (Claude Code CLI)');
+    
+    console.log(color(`⚠️  Playwright MCP requirements not met. Missing: ${missing.join(', ')}`, colors.yellow));
+    console.log(color('   Install Node.js to get npx: https://nodejs.org/', colors.dim));
+    console.log(color('   Playwright MCP features will be disabled but workflow continues normally.', colors.dim));
+    return false;
+  }
+  
+  console.log(color('✓ Playwright MCP requirements detected', colors.green));
+  
+  const installPlaywright = await question(color('  Install Playwright MCP for browser automation and testing? (y/n): ', colors.cyan));
+  
+  if (installPlaywright.toLowerCase() === 'y') {
+    try {
+      console.log(color('  Installing Playwright MCP server...', colors.dim));
+      
+      // Add Playwright MCP server to Claude Code
+      execSync('claude mcp add playwright npx @playwright/mcp@latest', { stdio: 'inherit' });
+      
+      console.log(color('  ✓ Playwright MCP server configured', colors.green));
+      console.log(color('    Provides browser automation and web page interaction capabilities', colors.dim));
+      
+      config.playwright_mcp.enabled = true;
+      return true;
+      
+    } catch (error) {
+      console.log(color('  ⚠️ Playwright MCP installation failed, continuing without it', colors.yellow));
+      console.log(color('    You can set it up manually later with: npx @playwright/mcp@latest', colors.dim));
+      return false;
+    }
+  }
+  
+  return false;
+}
 
 // Create directory structure
 async function createDirectories() {
@@ -1005,6 +1215,9 @@ async function install() {
     await installDaicCommand();
     const serenaMCPInstalled = await setupSerenaMCP();
     const memoryBankMCPInstalled = await setupMemoryBankMCP();
+    const githubMCPInstalled = await setupGitHubMCP();
+    const storybookMCPInstalled = await setupStorybookMCP();
+    const playwrightMCPInstalled = await setupPlaywrightMCP();
     const { statuslineInstalled } = await configure();
     await saveConfig(statuslineInstalled);
     await setupClaudeMd();

@@ -694,4 +694,440 @@ python cc_sessions/hooks/document-versioning.py restore PRD.md 1.0
 
 ---
 
-**Next Steps:** Once all MCP servers (Serena, Memory Bank) and Document Governance are configured, experience a complete document-driven development workflow where every change is validated against requirements, context is automatically preserved, and project knowledge is maintained across all development sessions.
+# GitHub MCP Integration
+
+## Overview
+
+GitHub MCP provides comprehensive repository management, issue tracking, pull request automation, and CI/CD workflow intelligence. This integration enables cc-sessions to interact directly with GitHub repositories, analyze code changes, manage issues, and automate development workflows.
+
+## What is GitHub MCP?
+
+GitHub MCP is a sophisticated GitHub integration system designed for AI-driven development workflows. Key capabilities include:
+
+- **Repository Management**: Browse repositories, search code, analyze commits, and understand project structure
+- **Issue & PR Automation**: Create, update, and manage issues and pull requests with AI assistance
+- **CI/CD Intelligence**: Monitor GitHub Actions workflows, analyze build failures, manage releases
+- **Code Analysis**: Review security findings, Dependabot alerts, code patterns, and comprehensive insights
+- **Team Collaboration**: Access discussions, manage notifications, analyze team activity
+
+## Installation Methods
+
+### Method 1: Automatic Installation (Recommended)
+
+GitHub MCP installation is included in the cc-sessions installation process:
+
+```bash
+# During cc-sessions installation, when prompted:
+Install GitHub MCP for repository management and automation? (y/n): y
+```
+
+The installer will:
+1. Check for Docker and Claude Code CLI availability
+2. Install GitHub MCP server using Docker
+3. Configure the MCP server in Claude Code
+4. Guide you through Personal Access Token setup
+
+### Method 2: Manual Installation
+
+**Prerequisites:**
+- Docker (container runtime)
+- Claude Code CLI
+- GitHub Personal Access Token
+
+**Installation:**
+```bash
+# Add GitHub MCP server to Claude Code
+claude mcp add github docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
+
+# Verify installation
+claude mcp list | grep github
+```
+
+**Configuration:**
+1. Create GitHub Personal Access Token at: https://github.com/settings/tokens
+2. Recommended scopes: `repo`, `read:packages`, `read:org`
+3. Set environment variable: `GITHUB_PERSONAL_ACCESS_TOKEN=your_token`
+
+## Available Tools
+
+### GitHub MCP Tools
+- `mcp__github__get_repo` - Retrieve repository information and metadata
+- `mcp__github__list_issues` - List and filter repository issues
+- `mcp__github__get_issue` - Get detailed issue information
+- `mcp__github__list_pull_requests` - List and filter pull requests
+- `mcp__github__get_pull_request` - Get detailed PR information and changes
+- `mcp__github__search_repositories` - Search across GitHub repositories
+- `mcp__github__get_file_contents` - Retrieve specific file contents from repositories
+- `mcp__github__list_commits` - List and analyze repository commits
+- `mcp__github__get_workflow_runs` - Monitor GitHub Actions workflow execution
+
+### Enhanced Agent Capabilities
+
+**Context-Gathering Agent Enhancement:**
+- Repository analysis and project structure understanding
+- Issue tracking and requirement gathering from GitHub issues
+- Pull request analysis for implementation context
+- Workflow and CI/CD pipeline analysis
+
+**Semantic Analysis Agent Enhancement:**
+- Cross-repository code analysis and symbol mapping
+- Pull request code review and analysis
+- Commit history analysis for architectural decisions
+- Integration with local semantic analysis for comprehensive understanding
+
+## Usage Examples
+
+### Example 1: Repository Analysis During Context Gathering
+
+```bash
+# Claude analyzes repository structure and recent activity
+get_repo("owner/repository") → Repository metadata and structure
+list_commits("owner/repository", limit=10) → Recent development activity
+list_issues("owner/repository", state="open") → Current project requirements
+
+# Results integrated into comprehensive context analysis
+```
+
+### Example 2: Issue-Driven Development Workflow
+
+```bash
+# User references GitHub issue in task creation
+get_issue("owner/repository", issue_number) → Issue requirements and discussion
+get_pull_request("owner/repository", pr_number) → Related implementation context
+search_repositories("specific functionality") → Similar implementations across projects
+```
+
+### Example 3: CI/CD and Workflow Intelligence
+
+```bash
+# Monitor and analyze build pipeline status
+get_workflow_runs("owner/repository") → Recent workflow executions
+get_file_contents("owner/repository", ".github/workflows/ci.yml") → CI configuration analysis
+list_commits("owner/repository", sha="branch") → Changes affecting build status
+```
+
+## Configuration Options
+
+### Authentication Setup
+Update `sessions/sessions-config.json`:
+```json
+{
+  "github_mcp": {
+    "enabled": true,
+    "auto_activate": true,
+    "requires_pat": true,
+    "default_owner": "your-org-or-username",
+    "rate_limit_enabled": true
+  }
+}
+```
+
+### Environment Variables
+- `GITHUB_PERSONAL_ACCESS_TOKEN`: Required for API access
+- `GITHUB_API_URL`: Optional, defaults to GitHub.com API
+- `GITHUB_RATE_LIMIT`: Optional rate limiting configuration
+
+## Benefits for cc-sessions
+
+### Enhanced Development Workflow
+- **Repository Integration**: Seamless connection between local development and GitHub
+- **Issue Tracking**: Automatic context gathering from GitHub issues and discussions
+- **PR Analysis**: Comprehensive pull request analysis and review assistance
+- **Workflow Monitoring**: Real-time visibility into CI/CD pipeline status
+
+### Improved Context Quality
+- **Project Understanding**: Deep analysis of repository structure and development patterns
+- **Requirement Traceability**: Link development tasks to GitHub issues and discussions
+- **Implementation Insights**: Learn from existing codebases and implementation patterns
+- **Team Collaboration**: Enhanced visibility into team development activities
+
+---
+
+# Storybook MCP Integration
+
+## Overview
+
+Storybook MCP provides specialized component development workflows, enabling seamless interaction with Storybook instances for component analysis, story management, and component-driven development practices. This integration bridges the gap between development and design systems.
+
+## What is Storybook MCP?
+
+Storybook MCP is a component-focused integration system designed for modern frontend development workflows. Key capabilities include:
+
+- **Component Discovery**: Retrieve comprehensive component inventories from Storybook
+- **Props Analysis**: Extract detailed component prop information and interfaces
+- **Story Management**: Analyze and manage component stories and variations
+- **Design System Integration**: Connect component development with design system practices
+- **Component Documentation**: Automated analysis of component APIs and usage patterns
+
+## Installation Methods
+
+### Method 1: Automatic Installation (Recommended)
+
+Storybook MCP installation is included in the cc-sessions installation process:
+
+```bash
+# During cc-sessions installation, when prompted:
+Install Storybook MCP for component development workflows? (y/n): y
+```
+
+The installer will:
+1. Check for Node.js/npx and Claude Code CLI availability
+2. Install Storybook MCP server using npx
+3. Configure the MCP server in Claude Code
+4. Guide you through Storybook URL configuration
+
+### Method 2: Manual Installation
+
+**Prerequisites:**
+- Node.js 18.0.0 or higher
+- Claude Code CLI
+- Running Storybook instance
+
+**Installation:**
+```bash
+# Add Storybook MCP server to Claude Code
+claude mcp add storybook npx -y storybook-mcp
+
+# Verify installation
+claude mcp list | grep storybook
+```
+
+**Configuration:**
+Set environment variable pointing to your Storybook:
+```bash
+export STORYBOOK_URL=http://localhost:6006/index.json
+```
+
+## Available Tools
+
+### Storybook MCP Tools
+- `mcp__storybook__getComponentList` - Retrieve all components from Storybook instance
+- `mcp__storybook__getComponentsProps` - Extract detailed component prop information
+
+### Enhanced Agent Capabilities
+
+**Dedicated Storybook Agent:**
+- Component-driven development workflows
+- Story generation and management
+- Component analysis and documentation
+- Design system maintenance and consistency
+- Props interface analysis and validation
+
+**Context-Gathering Agent Enhancement:**
+- Component inventory analysis for UI-focused tasks
+- Design system pattern recognition
+- Component usage and dependency mapping
+
+## Usage Examples
+
+### Example 1: Component Analysis and Documentation
+
+```bash
+# Storybook agent analyzes component ecosystem
+getComponentList() → Complete component inventory
+getComponentsProps("ButtonComponent") → Detailed prop analysis and interface
+
+# Results used for component development planning
+```
+
+### Example 2: Design System Audit
+
+```bash
+# Systematic analysis of component consistency
+getComponentList() → All available components
+# For each component:
+getComponentsProps(componentName) → Props analysis
+# Generate consistency report and recommendations
+```
+
+### Example 3: New Component Development
+
+```bash
+# Research similar components for patterns
+getComponentList() → Existing component patterns
+getComponentsProps("SimilarComponent") → Interface patterns to follow
+# Create new component following established patterns
+```
+
+## Configuration Options
+
+### Storybook Connection
+Update `sessions/sessions-config.json`:
+```json
+{
+  "storybook_mcp": {
+    "enabled": true,
+    "auto_activate": true,
+    "storybook_url": "http://localhost:6006/index.json",
+    "timeout": 30000,
+    "retry_attempts": 3
+  }
+}
+```
+
+### Environment Variables
+- `STORYBOOK_URL`: Required, points to Storybook index.json
+- `STORYBOOK_TIMEOUT`: Optional connection timeout
+- `CUSTOM_TOOLS`: Optional custom tool extensions
+
+## Benefits for cc-sessions
+
+### Component-Driven Development
+- **Component Analysis**: Deep understanding of component APIs and patterns
+- **Story Management**: Systematic approach to story creation and maintenance
+- **Design System Integration**: Seamless connection with design system practices
+- **Component Documentation**: Automated component interface documentation
+
+### Enhanced Development Workflow
+- **Pattern Recognition**: Learn from existing component implementations
+- **Consistency Enforcement**: Maintain design system consistency across components
+- **Component Discovery**: Easily find and analyze existing components
+- **Interface Validation**: Ensure component APIs follow established patterns
+
+---
+
+# Playwright MCP Integration
+
+## Overview
+
+Playwright MCP provides comprehensive end-to-end testing, browser automation, and web page interaction capabilities. This integration enables cc-sessions to create robust test suites, automate user workflows, and ensure web application quality through systematic testing approaches.
+
+## What is Playwright MCP?
+
+Playwright MCP is a browser automation and testing integration system designed for comprehensive web application quality assurance. Key capabilities include:
+
+- **Browser Automation**: Cross-browser testing and automation across Chromium, Firefox, and WebKit
+- **Visual Testing**: Screenshot capture and visual regression testing
+- **User Interaction Simulation**: Comprehensive form filling, clicking, and user journey automation
+- **Accessibility Testing**: Role-based element interaction and accessibility validation
+- **Performance Testing**: Page load monitoring and interaction response measurement
+
+## Installation Methods
+
+### Method 1: Automatic Installation (Recommended)
+
+Playwright MCP installation is included in the cc-sessions installation process:
+
+```bash
+# During cc-sessions installation, when prompted:
+Install Playwright MCP for browser automation and testing? (y/n): y
+```
+
+The installer will:
+1. Check for Node.js/npx and Claude Code CLI availability
+2. Install Playwright MCP server using npx
+3. Configure the MCP server in Claude Code
+4. Set up browser automation capabilities
+
+### Method 2: Manual Installation
+
+**Prerequisites:**
+- Node.js (latest LTS recommended)
+- Claude Code CLI
+
+**Installation:**
+```bash
+# Add Playwright MCP server to Claude Code
+claude mcp add playwright npx @playwright/mcp@latest
+
+# Verify installation
+claude mcp list | grep playwright
+```
+
+## Available Tools
+
+### Playwright MCP Tools
+- `mcp__playwright__navigate` - Navigate to URLs and manage page state
+- `mcp__playwright__screenshot` - Capture page and element screenshots
+- `mcp__playwright__click` - Simulate user clicks on elements
+- `mcp__playwright__type` - Input text into form fields
+- `mcp__playwright__get_by_role` - Find elements by accessibility role
+- `mcp__playwright__get_by_text` - Locate elements by visible text
+- `mcp__playwright__wait_for_selector` - Wait for elements to appear
+- `mcp__playwright__evaluate` - Execute JavaScript in browser context
+
+### Enhanced Agent Capabilities
+
+**Dedicated Playwright Agent:**
+- End-to-end test suite creation and management
+- Visual regression testing workflows
+- User journey validation and automation
+- Performance monitoring and analysis
+- Cross-browser compatibility testing
+
+**Context-Gathering Agent Enhancement:**
+- Application workflow analysis through browser interaction
+- User interface structure understanding
+- Interactive element discovery and mapping
+
+## Usage Examples
+
+### Example 1: End-to-End Test Creation
+
+```bash
+# Playwright agent creates comprehensive test suite
+navigate("https://app.example.com") → Load application
+click("button[data-testid='login']") → Simulate user interaction
+type("input[name='email']", "user@example.com") → Fill form fields
+screenshot() → Capture test evidence
+```
+
+### Example 2: Visual Regression Testing
+
+```bash
+# Systematic visual testing workflow
+navigate("https://app.example.com/dashboard") → Load target page
+wait_for_selector(".dashboard-content") → Ensure page loaded
+screenshot({ fullPage: true }) → Capture baseline
+# Compare with previous screenshots for regression detection
+```
+
+### Example 3: Accessibility and User Journey Testing
+
+```bash
+# Accessibility-focused testing approach
+get_by_role("button", { name: "Submit" }) → Accessibility-compliant selection
+get_by_text("Welcome back") → Content-based element location
+evaluate("document.querySelector('h1').textContent") → Custom page analysis
+```
+
+## Configuration Options
+
+### Browser and Testing Setup
+Update `sessions/sessions-config.json`:
+```json
+{
+  "playwright_mcp": {
+    "enabled": true,
+    "auto_activate": true,
+    "browser_automation": true,
+    "headless": true,
+    "viewport": { "width": 1280, "height": 720 },
+    "timeout": 30000
+  }
+}
+```
+
+### Testing Configuration
+- **Browser Selection**: Chromium, Firefox, WebKit support
+- **Device Emulation**: Mobile and tablet testing capabilities
+- **Network Throttling**: Slow network and offline testing
+- **Parallel Execution**: Multi-worker test execution
+
+## Benefits for cc-sessions
+
+### Comprehensive Testing Capabilities
+- **End-to-End Coverage**: Complete user journey testing automation
+- **Visual Quality Assurance**: Screenshot-based regression detection
+- **Cross-Browser Validation**: Consistent behavior across browser engines
+- **Performance Monitoring**: Page load and interaction performance tracking
+
+### Enhanced Development Workflow
+- **Quality Gates**: Automated testing integration in development workflows
+- **Bug Reproduction**: Systematic reproduction of reported issues
+- **Feature Validation**: Automated validation of new feature implementations
+- **User Experience Assurance**: Comprehensive UX testing and validation
+
+---
+
+**Next Steps:** Once all MCP servers (Serena, Memory Bank, GitHub, Storybook, Playwright) and Document Governance are configured, experience a complete development workflow where code analysis is enhanced with semantic precision, repository management is seamlessly integrated, component development follows design system practices, comprehensive testing ensures quality, context is automatically preserved, and project knowledge is maintained across all development sessions.

@@ -97,6 +97,21 @@ class SessionsInstaller:
                 "auto_activate": True,
                 "memory_bank_root": ""
             },
+            "github_mcp": {
+                "enabled": False,
+                "auto_activate": True,
+                "requires_pat": True
+            },
+            "storybook_mcp": {
+                "enabled": False,
+                "auto_activate": True,
+                "storybook_url": ""
+            },
+            "playwright_mcp": {
+                "enabled": False,
+                "auto_activate": True,
+                "browser_automation": True
+            },
             "document_governance": {
                 "enabled": False,
                 "auto_context_retention": True,
@@ -161,6 +176,12 @@ class SessionsInstaller:
                     installed.add('serena')
                 elif 'memory-bank' in line.lower() or 'memorybank' in line.lower():
                     installed.add('memory-bank')
+                elif 'github-mcp' in line.lower() or 'github_mcp' in line.lower():
+                    installed.add('github')
+                elif 'storybook-mcp' in line.lower() or 'storybook' in line.lower():
+                    installed.add('storybook')
+                elif 'playwright-mcp' in line.lower() or 'playwright' in line.lower():
+                    installed.add('playwright')
             return installed
         except (subprocess.CalledProcessError, FileNotFoundError):
             return set()
@@ -293,7 +314,195 @@ class SessionsInstaller:
         
         return False
 
+    def check_github_mcp(self) -> dict:
+        """Check for GitHub MCP availability"""
+        has_docker = command_exists("docker")
+        has_claude = command_exists("claude")
+        installed_servers = self.get_installed_mcp_servers()
+        
+        return {
+            "docker": has_docker,
+            "claude": has_claude,
+            "available": has_docker and has_claude,
+            "already_installed": "github" in installed_servers
+        }
     
+    def setup_github_mcp(self) -> bool:
+        """Setup GitHub MCP integration"""
+        github_status = self.check_github_mcp()
+        
+        if github_status["already_installed"]:
+            print(color("✓ GitHub MCP already installed", Colors.GREEN))
+            self.config["github_mcp"]["enabled"] = True
+            return True
+        
+        if not github_status["available"]:
+            missing = []
+            if not github_status["docker"]:
+                missing.append("docker (container runtime)")
+            if not github_status["claude"]:
+                missing.append("claude (Claude Code CLI)")
+            
+            print(color(f"⚠️  GitHub MCP requirements not met. Missing: {', '.join(missing)}", Colors.YELLOW))
+            print(color("   Install Docker: https://docs.docker.com/get-docker/", Colors.DIM))
+            print(color("   GitHub MCP features will be disabled but workflow continues normally.", Colors.DIM))
+            return False
+        
+        print(color("✓ GitHub MCP requirements detected", Colors.GREEN))
+        
+        response = input(color("  Install GitHub MCP for repository management and automation? (y/n): ", Colors.CYAN))
+        
+        if response.lower() == 'y':
+            try:
+                print(color("  Installing GitHub MCP server...", Colors.DIM))
+                print(color("  Note: You will need a GitHub Personal Access Token to use this server", Colors.YELLOW))
+                print(color("  Create one at: https://github.com/settings/tokens", Colors.DIM))
+                print(color("  Recommended scopes: repo, read:packages, read:org", Colors.DIM))
+                
+                # Add GitHub MCP server to Claude Code using Docker
+                subprocess.run([
+                    "claude", "mcp", "add", "github",
+                    "docker", "run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+                    "ghcr.io/github/github-mcp-server"
+                ], check=True)
+                
+                print(color("  ✓ GitHub MCP server configured", Colors.GREEN))
+                print(color("    Remember to set GITHUB_PERSONAL_ACCESS_TOKEN environment variable", Colors.DIM))
+                
+                self.config["github_mcp"]["enabled"] = True
+                return True
+                
+            except subprocess.CalledProcessError:
+                print(color("  ⚠️ GitHub MCP installation failed, continuing without it", Colors.YELLOW))
+                print(color("    You can set it up manually later with Docker", Colors.DIM))
+                return False
+        
+        return False
+
+    def check_storybook_mcp(self) -> dict:
+        """Check for Storybook MCP availability"""
+        has_npx = command_exists("npx")
+        has_claude = command_exists("claude")
+        installed_servers = self.get_installed_mcp_servers()
+        
+        return {
+            "npx": has_npx,
+            "claude": has_claude,
+            "available": has_npx and has_claude,
+            "already_installed": "storybook" in installed_servers
+        }
+    
+    def setup_storybook_mcp(self) -> bool:
+        """Setup Storybook MCP integration"""
+        storybook_status = self.check_storybook_mcp()
+        
+        if storybook_status["already_installed"]:
+            print(color("✓ Storybook MCP already installed", Colors.GREEN))
+            self.config["storybook_mcp"]["enabled"] = True
+            return True
+        
+        if not storybook_status["available"]:
+            missing = []
+            if not storybook_status["npx"]:
+                missing.append("npx (Node.js package runner)")
+            if not storybook_status["claude"]:
+                missing.append("claude (Claude Code CLI)")
+            
+            print(color(f"⚠️  Storybook MCP requirements not met. Missing: {', '.join(missing)}", Colors.YELLOW))
+            print(color("   Install Node.js to get npx: https://nodejs.org/", Colors.DIM))
+            print(color("   Storybook MCP features will be disabled but workflow continues normally.", Colors.DIM))
+            return False
+        
+        print(color("✓ Storybook MCP requirements detected", Colors.GREEN))
+        
+        response = input(color("  Install Storybook MCP for component development workflows? (y/n): ", Colors.CYAN))
+        
+        if response.lower() == 'y':
+            try:
+                print(color("  Installing Storybook MCP server...", Colors.DIM))
+                print(color("  Note: You will need to provide STORYBOOK_URL pointing to your Storybook index.json", Colors.YELLOW))
+                
+                # Add Storybook MCP server to Claude Code
+                subprocess.run([
+                    "claude", "mcp", "add", "storybook",
+                    "npx", "-y", "storybook-mcp"
+                ], check=True)
+                
+                print(color("  ✓ Storybook MCP server configured", Colors.GREEN))
+                print(color("    Remember to set STORYBOOK_URL environment variable", Colors.DIM))
+                print(color("    Example: STORYBOOK_URL=http://localhost:6006/index.json", Colors.DIM))
+                
+                self.config["storybook_mcp"]["enabled"] = True
+                return True
+                
+            except subprocess.CalledProcessError:
+                print(color("  ⚠️ Storybook MCP installation failed, continuing without it", Colors.YELLOW))
+                print(color("    You can set it up manually later with: npx storybook-mcp", Colors.DIM))
+                return False
+        
+        return False
+
+    def check_playwright_mcp(self) -> dict:
+        """Check for Playwright MCP availability"""
+        has_npx = command_exists("npx")
+        has_claude = command_exists("claude")
+        installed_servers = self.get_installed_mcp_servers()
+        
+        return {
+            "npx": has_npx,
+            "claude": has_claude,
+            "available": has_npx and has_claude,
+            "already_installed": "playwright" in installed_servers
+        }
+    
+    def setup_playwright_mcp(self) -> bool:
+        """Setup Playwright MCP integration"""
+        playwright_status = self.check_playwright_mcp()
+        
+        if playwright_status["already_installed"]:
+            print(color("✓ Playwright MCP already installed", Colors.GREEN))
+            self.config["playwright_mcp"]["enabled"] = True
+            return True
+        
+        if not playwright_status["available"]:
+            missing = []
+            if not playwright_status["npx"]:
+                missing.append("npx (Node.js package runner)")
+            if not playwright_status["claude"]:
+                missing.append("claude (Claude Code CLI)")
+            
+            print(color(f"⚠️  Playwright MCP requirements not met. Missing: {', '.join(missing)}", Colors.YELLOW))
+            print(color("   Install Node.js to get npx: https://nodejs.org/", Colors.DIM))
+            print(color("   Playwright MCP features will be disabled but workflow continues normally.", Colors.DIM))
+            return False
+        
+        print(color("✓ Playwright MCP requirements detected", Colors.GREEN))
+        
+        response = input(color("  Install Playwright MCP for browser automation and testing? (y/n): ", Colors.CYAN))
+        
+        if response.lower() == 'y':
+            try:
+                print(color("  Installing Playwright MCP server...", Colors.DIM))
+                
+                # Add Playwright MCP server to Claude Code
+                subprocess.run([
+                    "claude", "mcp", "add", "playwright",
+                    "npx", "@playwright/mcp@latest"
+                ], check=True)
+                
+                print(color("  ✓ Playwright MCP server configured", Colors.GREEN))
+                print(color("    Provides browser automation and web page interaction capabilities", Colors.DIM))
+                
+                self.config["playwright_mcp"]["enabled"] = True
+                return True
+                
+            except subprocess.CalledProcessError:
+                print(color("  ⚠️ Playwright MCP installation failed, continuing without it", Colors.YELLOW))
+                print(color("    You can set it up manually later with: npx @playwright/mcp@latest", Colors.DIM))
+                return False
+        
+        return False
+
     def create_directories(self) -> None:
         """Create necessary directory structure"""
         print(color("Creating directory structure...", Colors.CYAN))
@@ -791,6 +1000,9 @@ class SessionsInstaller:
             self.install_daic_command()
             serena_mcp_installed = self.setup_serena_mcp()
             memory_bank_mcp_installed = self.setup_memory_bank_mcp()
+            github_mcp_installed = self.setup_github_mcp()
+            storybook_mcp_installed = self.setup_storybook_mcp()
+            playwright_mcp_installed = self.setup_playwright_mcp()
             self.configure()
             self.save_config()
             self.setup_claude_md()
