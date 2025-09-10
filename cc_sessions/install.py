@@ -261,8 +261,8 @@ class SessionsInstaller:
             "already_installed": "memory-bank" in installed_servers
         }
     
-    def setup_memory_bank_mcp(self) -> bool:
-        """Setup Memory Bank MCP integration"""
+    def install_memory_bank_mcp(self) -> bool:
+        """Install Memory Bank MCP server only"""
         memory_bank_status = self.check_memory_bank_mcp()
         
         if memory_bank_status["already_installed"]:
@@ -307,43 +307,116 @@ class SessionsInstaller:
                 self.config["memory_bank_mcp"]["enabled"] = True
                 self.config["memory_bank_mcp"]["memory_bank_root"] = str(memory_bank_root)
                 
-                # Collect files to sync with Memory Bank
-                print(color("\n  📄 File Synchronization Setup", Colors.CYAN))
-                print(color("  Specify markdown files to sync with Memory Bank for persistent context.", Colors.DIM))
-                print(color('  Examples: "README.md", "docs/architecture.md", "DESIGN.md"', Colors.DIM))
-                print()
-                
-                while True:
-                    file_path = input(color("  Add markdown file to sync (Enter path relative to project root, or Enter to skip): ", Colors.CYAN))
-                    if not file_path:
-                        break
-                    
-                    # Validate file exists and is markdown
-                    full_path = self.project_root / file_path
-                    if not full_path.exists():
-                        print(color(f"  ⚠️ File not found: {file_path}", Colors.YELLOW))
-                        continue
-                    if not file_path.lower().endswith('.md'):
-                        print(color(f"  ⚠️ Only markdown files (.md) are supported", Colors.YELLOW))
-                        continue
-                    
-                    # Add to sync files configuration
-                    sync_file = {
-                        "path": file_path,
-                        "status": "pending",
-                        "last_synced": None
-                    }
-                    self.config["memory_bank_mcp"]["sync_files"].append(sync_file)
-                    print(color(f'  ✓ Added: "{file_path}"', Colors.GREEN))
-                
                 return True
                 
             except subprocess.CalledProcessError:
-                print(color("  ⚠️ Memory Bank MCP installation failed, continuing without it", Colors.YELLOW))
+                print(color("  ⚠️ Memory Bank MCP server installation failed", Colors.RED))
                 print(color("    You can set it up manually later with: npx -y @smithery/cli install @alioshr/memory-bank-mcp --client claude", Colors.DIM))
                 return False
         
         return False
+
+    def configure_memory_bank_files(self) -> bool:
+        """Configure Memory Bank file synchronization and PRD/FSD detection"""
+        if not self.config["memory_bank_mcp"]["enabled"]:
+            return False
+            
+        try:
+            # Collect requirement documents with folder-based detection
+            print(color("\n  📋 Requirement Documents", Colors.CYAN))
+            print(color("  Specify folder to search for PRD/FSD files automatically.", Colors.DIM))
+            print(color('  Examples: "docs/", "requirements/", "spec/"', Colors.DIM))
+            print()
+            
+            folder_path = input(color("  Folder path to search for PRD/FSD files (relative to project root, or Enter to skip): ", Colors.CYAN))
+            detected_files = {"prd": None, "fsd": None}
+            
+            if folder_path:
+                search_dir = self.project_root / folder_path
+                if search_dir.exists() and search_dir.is_dir():
+                    print(color(f"  Searching {folder_path} for PRD/FSD files...", Colors.DIM))
+                    
+                    # Search for markdown files in the directory
+                    for md_file in search_dir.rglob("*.md"):
+                        rel_path = str(md_file.relative_to(self.project_root))
+                        file_name_lower = md_file.name.lower()
+                        
+                        # Check filename for PRD indicators
+                        if any(indicator in file_name_lower for indicator in ["prd", "product-req", "product_req", "requirements"]):
+                            if not detected_files["prd"]:  # Take the first match
+                                detected_files["prd"] = rel_path
+                                self.config["document_governance"]["prd_file"] = rel_path
+                                print(color(f'  ✓ PRD detected: "{rel_path}"', Colors.GREEN))
+                        
+                        # Check filename for FSD indicators  
+                        elif any(indicator in file_name_lower for indicator in ["fsd", "functional-spec", "functional_spec", "spec"]):
+                            if not detected_files["fsd"]:  # Take the first match
+                                detected_files["fsd"] = rel_path
+                                self.config["document_governance"]["fsd_file"] = rel_path
+                                print(color(f'  ✓ FSD detected: "{rel_path}"', Colors.GREEN))
+                    
+                    if not detected_files["prd"] and not detected_files["fsd"]:
+                        print(color(f"  ⚠️ No PRD/FSD files found in {folder_path}", Colors.YELLOW))
+                else:
+                    print(color(f"  ⚠️ Folder not found: {folder_path}", Colors.YELLOW))
+
+            # Collect files to sync with Memory Bank
+            print(color("\n  📄 File Synchronization Setup", Colors.CYAN))
+            print(color("  Specify markdown files to sync with Memory Bank for persistent context.", Colors.DIM))
+            print(color('  Examples: "README.md", "docs/architecture.md", "DESIGN.md"', Colors.DIM))
+            print()
+            
+            # Auto-add detected PRD/FSD files to sync
+            auto_sync_files = []
+            if detected_files["prd"]:
+                auto_sync_files.append(detected_files["prd"])
+            if detected_files["fsd"]:
+                auto_sync_files.append(detected_files["fsd"])
+            
+            for file_path in auto_sync_files:
+                sync_file = {
+                    "path": file_path,
+                    "status": "pending",
+                    "last_synced": None
+                }
+                self.config["memory_bank_mcp"]["sync_files"].append(sync_file)
+                print(color(f'  ✓ Auto-added requirement doc: "{file_path}"', Colors.GREEN))
+            
+            while True:
+                file_path = input(color("  Add markdown file to sync (Enter path relative to project root, or Enter to skip): ", Colors.CYAN))
+                if not file_path:
+                    break
+                
+                # Skip if already added
+                if any(f["path"] == file_path for f in self.config["memory_bank_mcp"]["sync_files"]):
+                    print(color(f"  ⚠️ File already added: {file_path}", Colors.YELLOW))
+                    continue
+                
+                # Validate file exists and is markdown
+                full_path = self.project_root / file_path
+                if not full_path.exists():
+                    print(color(f"  ⚠️ File not found: {file_path}", Colors.YELLOW))
+                    continue
+                if not file_path.lower().endswith('.md'):
+                    print(color(f"  ⚠️ Only markdown files (.md) are supported", Colors.YELLOW))
+                    continue
+                
+                # Add to sync files configuration
+                sync_file = {
+                    "path": file_path,
+                    "status": "pending",
+                    "last_synced": None
+                }
+                self.config["memory_bank_mcp"]["sync_files"].append(sync_file)
+                print(color(f'  ✓ Added: "{file_path}"', Colors.GREEN))
+            
+            return True
+            
+        except Exception as e:
+            print(color("  ⚠️ Error during Memory Bank file configuration", Colors.YELLOW))
+            print(color(f"    Error: {str(e)}", Colors.DIM))
+            print(color("    Memory Bank MCP server is still installed and functional", Colors.GREEN))
+            return False
 
     def check_github_mcp(self) -> dict:
         """Check for GitHub MCP availability"""
@@ -1030,7 +1103,9 @@ class SessionsInstaller:
             self.copy_files()
             self.install_daic_command()
             serena_mcp_installed = self.setup_serena_mcp()
-            memory_bank_mcp_installed = self.setup_memory_bank_mcp()
+            memory_bank_mcp_installed = self.install_memory_bank_mcp()
+            if memory_bank_mcp_installed:
+                self.configure_memory_bank_files()
             github_mcp_installed = self.setup_github_mcp()
             storybook_mcp_installed = self.setup_storybook_mcp()
             playwright_mcp_installed = self.setup_playwright_mcp()
