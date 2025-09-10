@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: Use ONLY when explicitly requested by user or when invoked by a protocol in sessions/protocols/. DO NOT use proactively. Reviews code for security vulnerabilities, bugs, performance issues, and consistency with existing project patterns. When using this agent, you must provide files and line ranges where code has been implemented along with the task file the code changes were made to satisfy.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, mcp__github__get_pull_request, mcp__github__create_pull_request_review, mcp__github__list_commits, mcp__github__get_file_contents, mcp__github__get_repo, mcp__github__list_issues, mcp__github__get_issue, mcp__github__create_pull_request, mcp__github__merge_pull_request
 ---
 
 # Code Review Agent

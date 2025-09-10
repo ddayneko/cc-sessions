@@ -120,7 +120,8 @@ const config = {
   memory_bank_mcp: {
     enabled: false,
     auto_activate: true,
-    memory_bank_root: ""
+    memory_bank_root: "",
+    sync_files: []
   },
   github_mcp: {
     enabled: false,
@@ -334,6 +335,40 @@ async function setupMemoryBankMCP() {
       
       config.memory_bank_mcp.enabled = true;
       config.memory_bank_mcp.memory_bank_root = memoryBankRoot;
+      
+      // Collect files to sync with Memory Bank
+      console.log(color('\n  📄 File Synchronization Setup', colors.cyan));
+      console.log(color('  Specify markdown files to sync with Memory Bank for persistent context.', colors.dim));
+      console.log(color('  Examples: "README.md", "docs/architecture.md", "DESIGN.md"', colors.dim));
+      console.log();
+      
+      while (true) {
+        const filePath = await question(color('  Add markdown file to sync (Enter path relative to project root, or Enter to skip): ', colors.cyan));
+        if (!filePath) {
+          break;
+        }
+        
+        // Validate file exists and is markdown
+        const fullPath = path.join(PROJECT_ROOT, filePath);
+        if (!fs.existsSync(fullPath)) {
+          console.log(color(`  ⚠️ File not found: ${filePath}`, colors.yellow));
+          continue;
+        }
+        if (!filePath.toLowerCase().endsWith('.md')) {
+          console.log(color('  ⚠️ Only markdown files (.md) are supported', colors.yellow));
+          continue;
+        }
+        
+        // Add to sync files configuration
+        const syncFile = {
+          path: filePath,
+          status: 'pending',
+          last_synced: null
+        };
+        config.memory_bank_mcp.sync_files.push(syncFile);
+        console.log(color(`  ✓ Added: "${filePath}"`, colors.green));
+      }
+      
       return true;
       
     } catch (error) {

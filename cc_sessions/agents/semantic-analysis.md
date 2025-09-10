@@ -1,7 +1,7 @@
 ---
 name: semantic-analysis
 description: Uses Serena MCP for precise code analysis and symbol-level operations. Provides semantic understanding of code structure, dependencies, and relationships. Complements text-based search with IDE-like precision.
-tools: Read, Grep, Glob, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__insert_after_symbol, mcp__serena__get_symbol_definition, mcp__serena__list_symbols, mcp__github__get_repo, mcp__github__get_file_contents, mcp__github__list_commits, mcp__github__get_pull_request, mcp__github__create_pull_request_review
+tools: Read, Grep, Glob, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__insert_after_symbol, mcp__serena__get_symbol_definition, mcp__serena__list_symbols, mcp__github__get_repo, mcp__github__get_file_contents, mcp__github__list_commits, mcp__github__get_pull_request, mcp__github__create_pull_request_review, mcp__github__create_commit, mcp__github__create_tree, mcp__github__create_blob, mcp__github__create_ref, mcp__github__update_ref, mcp__github__merge, mcp__github__push_files
 ---
 
 # Semantic Analysis Agent

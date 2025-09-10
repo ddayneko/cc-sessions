@@ -51,6 +51,55 @@ EOF
 
 ## 5. Git Operations (Commit & Merge)
 
+**Option A: GitHub MCP Automated Workflow (Recommended)**
+If GitHub MCP is available and user prefers automated workflow:
+- Offer to create pull request and use GitHub's merge workflow
+- Skip to Section 5A below
+
+**Option B: Local Git Workflow**
+For local-only workflow or when GitHub MCP unavailable:
+- Continue with traditional git workflow below
+
+### 5A. GitHub MCP Automated Workflow
+
+Ask user: "Would you like to use GitHub MCP for automated PR creation and merge? (y/n)"
+
+If yes:
+
+#### Step 1: Create Pull Request
+```
+1. Use mcp__github__create_pull_request with:
+   - Title: "[Task] Brief description from task file"
+   - Body: Summary of changes and task completion
+   - Base: main (or parent task branch for subtasks)
+   - Head: current feature branch
+
+2. Present PR URL to user for review
+```
+
+#### Step 2: User Review & Approval
+```
+Present to user:
+"Pull Request created: [PR URL]
+Would you like me to:
+1. Auto-merge immediately (if no conflicts)  
+2. Wait for manual review and then merge
+3. Leave open for manual handling"
+```
+
+#### Step 3: Automated Merge (if approved)
+```
+1. Use mcp__github__merge_pull_request with:
+   - merge_method: "squash" (clean history)
+   - commit_title: Generated from task
+   - commit_message: Task summary + completion notes
+
+2. Use mcp__github__update_ref to delete feature branch (cleanup)
+3. Pull latest main locally: git pull origin main
+```
+
+### 5B. Local Git Workflow
+
 ### Step 1: Review Unstaged Changes
 
 ```bash

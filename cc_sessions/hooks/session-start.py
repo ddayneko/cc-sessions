@@ -22,6 +22,49 @@ try:
 except:
     developer_name = 'the developer'
 
+def load_memory_bank_files(project_root):
+    """Load synchronized files from Memory Bank MCP if available."""
+    try:
+        config_file = project_root / 'sessions' / 'sessions-config.json'
+        if not config_file.exists():
+            return None
+        
+        with open(config_file, 'r') as f:
+            config = json.load(f)
+        
+        memory_bank_config = config.get('memory_bank_mcp', {})
+        if not memory_bank_config.get('enabled', False):
+            return None
+        
+        sync_files = memory_bank_config.get('sync_files', [])
+        if not sync_files:
+            return None
+        
+        # Check for files marked as "in_memory"
+        in_memory_files = [f for f in sync_files if f.get('status') == 'in_memory']
+        if not in_memory_files:
+            return None
+        
+        context = "\n\n" + "="*60 + "\n"
+        context += "PERSISTENT MEMORY BANK CONTEXT\n"
+        context += "="*60 + "\n\n"
+        context += f"The following {len(in_memory_files)} files are synchronized with Memory Bank MCP:\n\n"
+        
+        for file_info in in_memory_files:
+            file_path = file_info['path']
+            last_synced = file_info.get('last_synced', 'unknown')
+            context += f"• {file_path} (last synced: {last_synced})\n"
+        
+        context += "\nThese files contain persistent project context and architectural knowledge.\n"
+        context += "Use Memory Bank MCP tools to read specific file contents as needed.\n"
+        context += "="*60 + "\n"
+        
+        return context
+        
+    except Exception as e:
+        # Graceful fallback - don't break session startup
+        return None
+
 # Initialize context
 context = f"""You are beginning a new context window with {developer_name}.
 
@@ -121,6 +164,11 @@ Follow the task-startup protocol to create branches and set up the work environm
 Review the Work Log at the end of the task file above.
 Continue from where you left off, updating the work log as you progress.
 """
+
+        # Load synchronized files from Memory Bank MCP if available
+        memory_bank_context = load_memory_bank_files(PROJECT_ROOT)
+        if memory_bank_context:
+            context += memory_bank_context
     else:
         # No active task - list available tasks
         tasks_dir = sessions_dir / 'tasks'

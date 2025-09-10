@@ -751,15 +751,34 @@ claude mcp list | grep github
 ## Available Tools
 
 ### GitHub MCP Tools
+
+**Repository & Information:**
 - `mcp__github__get_repo` - Retrieve repository information and metadata
+- `mcp__github__search_repositories` - Search across GitHub repositories
+- `mcp__github__get_file_contents` - Retrieve specific file contents from repositories
+
+**Issues & Pull Requests:**
 - `mcp__github__list_issues` - List and filter repository issues
 - `mcp__github__get_issue` - Get detailed issue information
 - `mcp__github__list_pull_requests` - List and filter pull requests
 - `mcp__github__get_pull_request` - Get detailed PR information and changes
-- `mcp__github__search_repositories` - Search across GitHub repositories
-- `mcp__github__get_file_contents` - Retrieve specific file contents from repositories
+- `mcp__github__create_pull_request` - Create new pull request
+- `mcp__github__merge_pull_request` - Merge pull request with options
+- `mcp__github__create_pull_request_review` - Create pull request review
+
+**Git Workflow & Commits:**
 - `mcp__github__list_commits` - List and analyze repository commits
+- `mcp__github__create_commit` - Create commits directly via GitHub API
+- `mcp__github__create_tree` - Create git tree for commit structure
+- `mcp__github__create_blob` - Create git blob for file content
+- `mcp__github__create_ref` - Create new branch references
+- `mcp__github__update_ref` - Update branch references
+- `mcp__github__merge` - Merge branches via API
+- `mcp__github__push_files` - Push multiple file changes in single commit
+
+**CI/CD & Actions:**
 - `mcp__github__get_workflow_runs` - Monitor GitHub Actions workflow execution
+- `mcp__github__trigger_workflow` - Trigger workflow dispatches
 
 ### Enhanced Agent Capabilities
 

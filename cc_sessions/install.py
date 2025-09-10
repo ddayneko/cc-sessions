@@ -95,7 +95,8 @@ class SessionsInstaller:
             "memory_bank_mcp": {
                 "enabled": False,
                 "auto_activate": True,
-                "memory_bank_root": ""
+                "memory_bank_root": "",
+                "sync_files": []
             },
             "github_mcp": {
                 "enabled": False,
@@ -305,6 +306,36 @@ class SessionsInstaller:
                 
                 self.config["memory_bank_mcp"]["enabled"] = True
                 self.config["memory_bank_mcp"]["memory_bank_root"] = str(memory_bank_root)
+                
+                # Collect files to sync with Memory Bank
+                print(color("\n  📄 File Synchronization Setup", Colors.CYAN))
+                print(color("  Specify markdown files to sync with Memory Bank for persistent context.", Colors.DIM))
+                print(color('  Examples: "README.md", "docs/architecture.md", "DESIGN.md"', Colors.DIM))
+                print()
+                
+                while True:
+                    file_path = input(color("  Add markdown file to sync (Enter path relative to project root, or Enter to skip): ", Colors.CYAN))
+                    if not file_path:
+                        break
+                    
+                    # Validate file exists and is markdown
+                    full_path = self.project_root / file_path
+                    if not full_path.exists():
+                        print(color(f"  ⚠️ File not found: {file_path}", Colors.YELLOW))
+                        continue
+                    if not file_path.lower().endswith('.md'):
+                        print(color(f"  ⚠️ Only markdown files (.md) are supported", Colors.YELLOW))
+                        continue
+                    
+                    # Add to sync files configuration
+                    sync_file = {
+                        "path": file_path,
+                        "status": "pending",
+                        "last_synced": None
+                    }
+                    self.config["memory_bank_mcp"]["sync_files"].append(sync_file)
+                    print(color(f'  ✓ Added: "{file_path}"', Colors.GREEN))
+                
                 return True
                 
             except subprocess.CalledProcessError:

@@ -1,7 +1,7 @@
 ---
 name: context-gathering
 description: Use when creating a new task OR when starting/switching to a task that lacks a context manifest. ALWAYS provide the task file path so the agent can read it and update it directly with the context manifest. Skip if task file already contains "Context Manifest" section.
-tools: Read, Glob, Grep, LS, Bash, Edit, MultiEdit, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__get_symbol_definition, mcp__serena__list_symbols, mcp__memory_bank__read_file, mcp__memory_bank__write_file, mcp__memory_bank__update_file, mcp__memory_bank__list_projects, mcp__memory_bank__list_files, mcp__github__get_repo, mcp__github__list_issues, mcp__github__get_issue, mcp__github__list_pull_requests, mcp__github__get_pull_request, mcp__github__search_repositories, mcp__github__get_file_contents, mcp__github__list_commits, mcp__github__get_workflow_runs
+tools: Read, Glob, Grep, LS, Bash, Edit, MultiEdit, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__get_symbol_definition, mcp__serena__list_symbols, mcp__memory_bank__read_file, mcp__memory_bank__write_file, mcp__memory_bank__update_file, mcp__memory_bank__list_projects, mcp__memory_bank__list_files, mcp__github__get_repo, mcp__github__list_issues, mcp__github__get_issue, mcp__github__list_pull_requests, mcp__github__get_pull_request, mcp__github__search_repositories, mcp__github__get_file_contents, mcp__github__list_commits, mcp__github__get_workflow_runs, mcp__github__create_pull_request, mcp__github__merge_pull_request, mcp__github__create_commit, mcp__github__push_files
 ---
 
 # Context-Gathering Agent
