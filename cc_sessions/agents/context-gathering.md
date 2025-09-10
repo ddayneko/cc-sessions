@@ -28,7 +28,7 @@ You are part of a sessions-based task management system. A new task has just bee
 3. **Architecture Analysis**: Use `list_symbols(file_path)` to understand module boundaries
 4. **Persistent Context**: Use `list_projects()` and `list_files(project)` to check for existing context memory
 5. **Historical Context**: Use `read_file(project, context_file)` to retrieve previous analysis and decisions
-6. **Document Alignment**: Use `read_file(project, "PRD.md")` and `read_file(project, "FSD.md")` for requirements validation
+6. **Document Alignment**: Check sessions-config.json for configured PRD/FSD paths in document_governance section, then use `read_file(project, configured_path)` for requirements validation. Fallback to `read_file(project, "PRD.md")` and `read_file(project, "FSD.md")` if not configured
 7. **Cross-Reference**: Use semantic findings to guide targeted text-based research
 8. **Context Preservation**: Use `write_file(project, "task_context.md")` to preserve comprehensive analysis
 
@@ -53,7 +53,7 @@ Hunt down using Grep/Glob/Read:
 **Hybrid Approach (Recommended When MCP Tools Available):**
 - Check Memory Bank for existing project context and requirements documents
 - Use semantic analysis for precise component discovery and dependency mapping
-- Validate proposed changes against PRD/FSD stored in Memory Bank
+- Validate proposed changes against configured PRD/FSD files (check sessions-config.json document_governance section for paths)
 - Expand with text search for business logic, configuration, and error handling
 - Cross-validate findings between semantic and persistent approaches
 - Preserve comprehensive context analysis in Memory Bank for future sessions

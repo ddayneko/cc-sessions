@@ -82,6 +82,7 @@ class SessionsInstaller:
     def __init__(self):
         self.package_dir = get_package_dir()
         self.project_root = self.detect_project_directory()
+        self._installed_mcp_servers = None  # Cache for MCP servers list
         self.config = {
             "developer_name": "the developer",
             "trigger_phrases": ["make it so", "run that", "go ahead", "yert"],
@@ -164,9 +165,13 @@ class SessionsInstaller:
                 sys.exit(1)
     
     def get_installed_mcp_servers(self) -> set:
-        """Get list of already installed MCP servers"""
+        """Get list of already installed MCP servers (cached to prevent repeated chrome launches)"""
+        if self._installed_mcp_servers is not None:
+            return self._installed_mcp_servers
+            
         if not command_exists("claude"):
-            return set()
+            self._installed_mcp_servers = set()
+            return self._installed_mcp_servers
         
         try:
             result = subprocess.run(["claude", "mcp", "list"], 
@@ -183,8 +188,10 @@ class SessionsInstaller:
                     installed.add('storybook')
                 elif 'playwright-mcp' in line.lower() or 'playwright' in line.lower():
                     installed.add('playwright')
+            self._installed_mcp_servers = installed
             return installed
         except (subprocess.CalledProcessError, FileNotFoundError):
+            self._installed_mcp_servers = set()
             return set()
     
     def check_serena_mcp(self) -> dict:
