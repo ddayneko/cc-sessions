@@ -91,6 +91,26 @@ class SessionsInstaller:
             "serena_mcp": {
                 "enabled": False,
                 "auto_activate": True
+            },
+            "memory_bank_mcp": {
+                "enabled": False,
+                "auto_activate": True,
+                "memory_bank_root": ""
+            },
+            "duckduckgo_mcp": {
+                "enabled": False,
+                "auto_activate": True,
+                "rate_limit_enabled": True
+            },
+            "document_governance": {
+                "enabled": False,
+                "auto_context_retention": True,
+                "document_validation": True,
+                "conflict_detection": True,
+                "auto_versioning": True,
+                "documents_path": "sessions/documents",
+                "version_history_limit": 10,
+                "require_user_confirmation": True
             }
         }
     
@@ -167,11 +187,10 @@ class SessionsInstaller:
             try:
                 print(color("  Installing Serena MCP server...", Colors.DIM))
                 
-                # Add Serena MCP server to Claude Code
+                # Add Serena MCP server to Claude Code using shell wrapper
                 subprocess.run([
                     "claude", "mcp", "add", "serena", 
-                    "uvx", "--from", "git+https://github.com/oraios/serena", 
-                    "serena", "start-mcp-server"
+                    "sh", "-c", "uvx --from git+https://github.com/oraios/serena serena start-mcp-server"
                 ], check=True, capture_output=True)
                 
                 print(color("  ✓ Serena MCP server configured", Colors.GREEN))
@@ -183,6 +202,133 @@ class SessionsInstaller:
             except subprocess.CalledProcessError:
                 print(color("  ⚠️ Serena MCP installation failed, continuing without it", Colors.YELLOW))
                 print(color("    You can set it up manually later with: claude mcp add serena ...", Colors.DIM))
+                return False
+        
+        return False
+
+    def check_memory_bank_mcp(self) -> dict:
+        """Check for Memory Bank MCP availability"""
+        has_npx = command_exists("npx")
+        has_claude = command_exists("claude")
+        
+        return {
+            "npx": has_npx,
+            "claude": has_claude,
+            "available": has_npx and has_claude
+        }
+    
+    def setup_memory_bank_mcp(self) -> bool:
+        """Setup Memory Bank MCP integration"""
+        memory_bank_status = self.check_memory_bank_mcp()
+        
+        if not memory_bank_status["available"]:
+            missing = []
+            if not memory_bank_status["npx"]:
+                missing.append("npx (Node.js package runner)")
+            if not memory_bank_status["claude"]:
+                missing.append("claude (Claude Code CLI)")
+            
+            print(color(f"⚠️  Memory Bank MCP requirements not met. Missing: {', '.join(missing)}", Colors.YELLOW))
+            print(color("   Install Node.js to get npx: https://nodejs.org/", Colors.DIM))
+            print(color("   Memory Bank MCP features will be disabled but workflow continues normally.", Colors.DIM))
+            return False
+        
+        print(color("✓ Memory Bank MCP requirements detected", Colors.GREEN))
+        
+        response = input(color("  Install Memory Bank MCP for persistent context analysis? (y/n): ", Colors.CYAN))
+        
+        if response.lower() == 'y':
+            try:
+                print(color("  Installing Memory Bank MCP server...", Colors.DIM))
+                
+                # Set default memory bank root if not specified
+                memory_bank_root = self.project_root / "sessions" / "memory_bank"
+                memory_bank_root.mkdir(parents=True, exist_ok=True)
+                
+                # Install Memory Bank MCP server using smithery
+                subprocess.run([
+                    "npx", "-y", "@smithery/cli", "install", 
+                    "@alioshr/memory-bank-mcp", "--client", "claude"
+                ], check=True, capture_output=True)
+                
+                print(color("  ✓ Memory Bank MCP server configured", Colors.GREEN))
+                print(color(f"    Memory bank root: {memory_bank_root}", Colors.DIM))
+                print(color("    Note: Configure MEMORY_BANK_ROOT environment variable if needed", Colors.DIM))
+                
+                self.config["memory_bank_mcp"]["enabled"] = True
+                self.config["memory_bank_mcp"]["memory_bank_root"] = str(memory_bank_root)
+                return True
+                
+            except subprocess.CalledProcessError:
+                print(color("  ⚠️ Memory Bank MCP installation failed, continuing without it", Colors.YELLOW))
+                print(color("    You can set it up manually later with: npx -y @smithery/cli install @alioshr/memory-bank-mcp --client claude", Colors.DIM))
+                return False
+        
+        return False
+
+    def check_duckduckgo_mcp(self) -> dict:
+        """Check for DuckDuckGo MCP availability"""
+        has_npx = command_exists("npx")
+        has_uv = command_exists("uv")
+        has_claude = command_exists("claude")
+        
+        return {
+            "npx": has_npx,
+            "uv": has_uv,
+            "claude": has_claude,
+            "available": (has_npx or has_uv) and has_claude
+        }
+    
+    def setup_duckduckgo_mcp(self) -> bool:
+        """Setup DuckDuckGo MCP integration"""
+        duckduckgo_status = self.check_duckduckgo_mcp()
+        
+        if not duckduckgo_status["available"]:
+            missing = []
+            if not duckduckgo_status["npx"] and not duckduckgo_status["uv"]:
+                missing.append("npx (Node.js) or uv (Python package manager)")
+            if not duckduckgo_status["claude"]:
+                missing.append("claude (Claude Code CLI)")
+            
+            print(color(f"⚠️  DuckDuckGo MCP requirements not met. Missing: {', '.join(missing)}", Colors.YELLOW))
+            print(color("   Install Node.js for npx: https://nodejs.org/ OR uv: curl -LsSf https://astral.sh/uv/install.sh | sh", Colors.DIM))
+            print(color("   DuckDuckGo MCP features will be disabled but workflow continues normally.", Colors.DIM))
+            return False
+        
+        print(color("✓ DuckDuckGo MCP requirements detected", Colors.GREEN))
+        
+        response = input(color("  Install DuckDuckGo MCP for web search and knowledge gathering? (y/n): ", Colors.CYAN))
+        
+        if response.lower() == 'y':
+            try:
+                print(color("  Installing DuckDuckGo MCP server...", Colors.DIM))
+                
+                # Try npx/smithery first, fall back to uv
+                if duckduckgo_status["npx"]:
+                    subprocess.run([
+                        "npx", "-y", "@smithery/cli", "install", 
+                        "@nickclyde/duckduckgo-mcp-server", "--client", "claude"
+                    ], check=True, capture_output=True)
+                    method = "Smithery (npx)"
+                elif duckduckgo_status["uv"]:
+                    subprocess.run([
+                        "claude", "mcp", "add", "ddg-search",
+                        "uvx", "duckduckgo-mcp-server"
+                    ], check=True, capture_output=True)
+                    method = "uv"
+                else:
+                    raise subprocess.CalledProcessError(1, "No installation method available")
+                
+                print(color("  ✓ DuckDuckGo MCP server configured", Colors.GREEN))
+                print(color(f"    Installation method: {method}", Colors.DIM))
+                print(color("    Note: Rate limits apply (30 searches/min, 20 fetches/min)", Colors.DIM))
+                
+                self.config["duckduckgo_mcp"]["enabled"] = True
+                return True
+                
+            except subprocess.CalledProcessError:
+                print(color("  ⚠️ DuckDuckGo MCP installation failed, continuing without it", Colors.YELLOW))
+                print(color("    You can set it up manually later with: npx -y @smithery/cli install @nickclyde/duckduckgo-mcp-server --client claude", Colors.DIM))
                 return False
         
         return False
@@ -199,6 +345,9 @@ class SessionsInstaller:
             "sessions/tasks",
             "sessions/tasks/done",
             "sessions/protocols",
+            "sessions/documents",
+            "sessions/documents/versions",
+            "sessions/documents/archive",
             "sessions/knowledge"
         ]
         
@@ -266,6 +415,13 @@ class SessionsInstaller:
             for command_file in commands_dir.glob("*.md"):
                 dest = self.project_root / ".claude/commands" / command_file.name
                 shutil.copy2(command_file, dest)
+            
+            # Copy Python command scripts
+            for script_file in commands_dir.glob("*.py"):
+                dest = self.project_root / ".claude/commands" / script_file.name
+                shutil.copy2(script_file, dest)
+                if os.name != 'nt':
+                    dest.chmod(0o755)
         
         # Copy knowledge files
         knowledge_dir = self.package_dir / "knowledge/claude-code"
@@ -673,6 +829,8 @@ class SessionsInstaller:
             self.copy_files()
             self.install_daic_command()
             serena_mcp_installed = self.setup_serena_mcp()
+            memory_bank_mcp_installed = self.setup_memory_bank_mcp()
+            duckduckgo_mcp_installed = self.setup_duckduckgo_mcp()
             self.configure()
             self.save_config()
             self.setup_claude_md()

@@ -477,6 +477,92 @@ Progress bar changes color: green < 50%, orange < 80%, red >= 80%.
 
 </details>
 
+<details>
+<summary><strong>Build Projects for Complex Work</strong></summary>
+<br>
+
+Some tasks are too big for a single session. Refactoring auth, rebuilding the API, migrating databases - these need structured, multi-step tracking.
+
+**Before Sessions:**
+```
+You: I need to refactor our entire auth system
+
+Claude: I'll refactor the auth system!
+[EDITS 47 FILES IMMEDIATELY]
+[BREAKS EVERYTHING]
+[YOU LOSE 3 DAYS ROLLING BACK]
+
+You: no wait that was supposed to be 15 carefully planned steps
+Claude: Oh. My bad.
+```
+
+**With Build Projects:**
+```
+You: I need to refactor our auth system - it's going to be like 15 steps
+
+Claude: That sounds like a perfect build project. Let me set one up:
+
+python3 .claude/commands/build-project.py create auth-refactor
+
+✅ Build project auth-refactor created!
+Next steps:
+1. Add implementation plan files to: sessions/build-projects/auth-refactor/plan/
+2. Run: python3 .claude/commands/build-project.py parse auth-refactor
+3. Start work: python3 .claude/commands/build-project.py work auth-refactor 1.1
+
+[You create plan files with numbered steps like 1.1, 1.2, 2.1, 2.2...]
+
+Claude: Ready to parse your plan files?
+
+You: yes
+
+Claude: [Uses build-project-parser agent to extract all steps]
+
+🔨 Build Project: auth-refactor
+Status: pending  
+Progress: 0.0% (0/15 steps)
+
+⏸️ 1.1: Extract user model interfaces
+⏸️ 1.2: Create new auth service layer  
+⏸️ 2.1: Migrate login endpoints
+⏸️ 2.2: Update session handling
+[... 11 more steps]
+
+You: start with 1.1
+
+Claude: 🔨 Starting work on step 1.1: Extract user model interfaces
+📁 File: auth-refactor-plan.md
+🌿 Branch: build-project/auth-refactor/step-1-1
+
+Implementation:
+- Extract User, Session interfaces from existing auth.ts
+- Move to shared/types/auth.ts
+- Update all imports across codebase
+
+Ready to implement?
+```
+
+**Build Projects give you:**
+- **Structured progress** - Each step tracked, validated, completed
+- **Automatic branching** - New branch per step: `build-project/name/step-1-1`
+- **Implementation plans** - Markdown files with detailed step breakdowns
+- **Progress tracking** - Visual progress, completion percentages
+- **Context preservation** - Task context maintained across all steps
+- **Validation criteria** - Clear success criteria for each step
+
+**Commands:**
+```bash
+python3 .claude/commands/build-project.py create my-big-feature
+python3 .claude/commands/build-project.py list                    # Show all projects
+python3 .claude/commands/build-project.py status my-big-feature   # Check progress  
+python3 .claude/commands/build-project.py work my-big-feature 1.1 # Start step
+python3 .claude/commands/build-project.py complete my-big-feature 1.1 # Finish step
+```
+
+Now your 15-step auth refactor becomes a managed, trackable process instead of code chaos.
+
+</details>
+
 This isn't complex. It's not heavy process. It's invisible rails that keep Claude from going off the cliff. You still describe what you want in natural language. Claude still writes code. But now it happens in a way that doesn't produce garbage.
 
 You code at the same speed. You just don't spend the next three hours unfucking what Claude just did.
@@ -580,6 +666,44 @@ sessions/knowledge/claude-code/
 ├── tool-permissions.md   # Tool blocking configuration
 └── slash-commands.md     # Command system reference
 ```
+
+### Command System
+
+Sessions includes a slash command system for common operations. Commands are defined in `.claude/commands/` as markdown files with embedded scripts:
+
+```
+.claude/commands/
+├── build-project.py      # Standalone Python script  
+├── build-project.md      # Command definition
+├── add-trigger.md        # Add discussion triggers
+└── api-mode.md          # Toggle token-saving mode
+```
+
+**How Commands Work:**
+1. **Command Definition** - `.md` files define allowed tools and arguments
+2. **Script Execution** - Commands run Python scripts or shell commands
+3. **Security** - Complex scripts extracted to standalone files for security
+
+**Available Commands:**
+```bash
+/build-project create my-feature    # Manage complex multi-step projects
+/add-trigger "ship it"              # Add trigger phrases  
+/api-mode                           # Toggle ultrathink for token saving
+```
+
+**Recent Security Update:**
+Previously, commands embedded Python scripts directly in markdown files using `!`python3 -c "..."` syntax. This was blocked by security restrictions. 
+
+Now complex commands like `/build-project` use standalone Python scripts referenced by the command definition:
+```markdown
+# Old (blocked):
+!`python3 -c "import json; sys.exit(0)"`
+
+# New (works):  
+!`python3 "$CLAUDE_PROJECT_DIR/.claude/commands/build-project.py" $ARGUMENTS`
+```
+
+This maintains full functionality while meeting security requirements.
 
 ### Modifying Behaviors
 

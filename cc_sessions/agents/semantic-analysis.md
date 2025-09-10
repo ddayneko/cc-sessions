@@ -1,7 +1,7 @@
 ---
 name: semantic-analysis
 description: Uses Serena MCP for precise code analysis and symbol-level operations. Provides semantic understanding of code structure, dependencies, and relationships. Complements text-based search with IDE-like precision.
-tools: Read, Grep, Glob, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__insert_after_symbol, mcp__serena__get_symbol_definition, mcp__serena__list_symbols
+tools: Read, Grep, Glob, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__insert_after_symbol, mcp__serena__get_symbol_definition, mcp__serena__list_symbols, mcp__duckduckgo__search, mcp__duckduckgo__fetch_content
 ---
 
 # Semantic Analysis Agent
