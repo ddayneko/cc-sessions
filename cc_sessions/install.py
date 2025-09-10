@@ -229,10 +229,21 @@ class SessionsInstaller:
             try:
                 print(color("  Installing Serena MCP server...", Colors.DIM))
                 
-                # Add Serena MCP server to Claude Code using shell wrapper
+                # Add Serena MCP server to Claude Code using JSON configuration
+                import json
+                serena_config = {
+                    "type": "stdio",
+                    "command": "uvx",
+                    "args": [
+                        "--from", "git+https://github.com/oraios/serena", 
+                        "serena", "start-mcp-server",
+                        "--enable-web-dashboard", "false",
+                        "--enable-gui-log-window", "false",
+                        "--log-level", "WARNING"
+                    ]
+                }
                 subprocess.run([
-                    "claude", "mcp", "add", "serena", 
-                    "sh", "-c", "uvx --from git+https://github.com/oraios/serena serena start-mcp-server"
+                    "claude", "mcp", "add-json", "serena", json.dumps(serena_config)
                 ], check=True)
                 
                 print(color("  ✓ Serena MCP server configured", Colors.GREEN))
@@ -294,15 +305,17 @@ class SessionsInstaller:
                 memory_bank_root = self.project_root / "sessions" / "memory_bank"
                 memory_bank_root.mkdir(parents=True, exist_ok=True)
                 
-                # Install Memory Bank MCP server using smithery
+                # Install Memory Bank MCP server using smithery with MEMORY_BANK_ROOT
+                env = os.environ.copy()
+                env["MEMORY_BANK_ROOT"] = str(memory_bank_root)
                 subprocess.run([
                     "npx", "-y", "@smithery/cli", "install", 
                     "@alioshr/memory-bank-mcp", "--client", "claude"
-                ], check=True)
+                ], env=env, check=True)
                 
                 print(color("  ✓ Memory Bank MCP server configured", Colors.GREEN))
                 print(color(f"    Memory bank root: {memory_bank_root}", Colors.DIM))
-                print(color("    Note: Configure MEMORY_BANK_ROOT environment variable if needed", Colors.DIM))
+                print(color("    MEMORY_BANK_ROOT automatically configured", Colors.GREEN))
                 
                 self.config["memory_bank_mcp"]["enabled"] = True
                 self.config["memory_bank_mcp"]["memory_bank_root"] = str(memory_bank_root)
@@ -420,14 +433,16 @@ class SessionsInstaller:
 
     def check_github_mcp(self) -> dict:
         """Check for GitHub MCP availability"""
-        has_docker = command_exists("docker")
+        has_go = command_exists("go")
         has_claude = command_exists("claude")
+        has_git = command_exists("git")
         installed_servers = self.get_installed_mcp_servers()
         
         return {
-            "docker": has_docker,
+            "go": has_go,
             "claude": has_claude,
-            "available": has_docker and has_claude,
+            "git": has_git,
+            "available": has_go and has_claude and has_git,
             "already_installed": "github" in installed_servers
         }
     
@@ -442,13 +457,15 @@ class SessionsInstaller:
         
         if not github_status["available"]:
             missing = []
-            if not github_status["docker"]:
-                missing.append("docker (container runtime)")
+            if not github_status["go"]:
+                missing.append("go (Go programming language)")
             if not github_status["claude"]:
                 missing.append("claude (Claude Code CLI)")
+            if not github_status["git"]:
+                missing.append("git (version control)")
             
             print(color(f"⚠️  GitHub MCP requirements not met. Missing: {', '.join(missing)}", Colors.YELLOW))
-            print(color("   Install Docker: https://docs.docker.com/get-docker/", Colors.DIM))
+            print(color("   Install Go: https://golang.org/doc/install", Colors.DIM))
             print(color("   GitHub MCP features will be disabled but workflow continues normally.", Colors.DIM))
             return False
         
@@ -458,27 +475,58 @@ class SessionsInstaller:
         
         if response.lower() == 'y':
             try:
-                print(color("  Installing GitHub MCP server...", Colors.DIM))
+                print(color("  Installing GitHub MCP server from source...", Colors.DIM))
                 print(color("  Note: You will need a GitHub Personal Access Token to use this server", Colors.YELLOW))
                 print(color("  Create one at: https://github.com/settings/tokens", Colors.DIM))
                 print(color("  Recommended scopes: repo, read:packages, read:org", Colors.DIM))
+                print()
                 
-                # Add GitHub MCP server to Claude Code using Docker
+                # Get GitHub Personal Access Token
+                github_token = input(color("  Enter your GitHub Personal Access Token: ", Colors.CYAN))
+                if not github_token:
+                    print(color("  ⚠️ GitHub token required, skipping GitHub MCP installation", Colors.YELLOW))
+                    return False
+                
+                # Create build directory
+                build_dir = self.project_root / ".claude" / "mcp-servers"
+                build_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Clone and build GitHub MCP server
+                print(color("  Cloning GitHub MCP server...", Colors.DIM))
                 subprocess.run([
-                    "claude", "mcp", "add", "github",
-                    "docker", "run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
-                    "ghcr.io/github/github-mcp-server"
+                    "git", "clone", "https://github.com/github/github-mcp-server.git",
+                    str(build_dir / "github-mcp-server")
+                ], check=True, capture_output=True)
+                
+                print(color("  Building GitHub MCP server...", Colors.DIM))
+                subprocess.run([
+                    "go", "build", "-o", "github-mcp-server"
+                ], cwd=build_dir / "github-mcp-server", check=True, capture_output=True)
+                
+                # Configure GitHub MCP server in Claude
+                binary_path = build_dir / "github-mcp-server" / "github-mcp-server"
+                import json
+                github_config = {
+                    "type": "stdio",
+                    "command": str(binary_path),
+                    "args": ["stdio"],
+                    "env": {
+                        "GITHUB_PERSONAL_ACCESS_TOKEN": github_token
+                    }
+                }
+                subprocess.run([
+                    "claude", "mcp", "add-json", "github", json.dumps(github_config)
                 ], check=True)
                 
                 print(color("  ✓ GitHub MCP server configured", Colors.GREEN))
-                print(color("    Remember to set GITHUB_PERSONAL_ACCESS_TOKEN environment variable", Colors.DIM))
+                print(color("    GitHub token configured and stored securely", Colors.GREEN))
                 
                 self.config["github_mcp"]["enabled"] = True
                 return True
                 
-            except subprocess.CalledProcessError:
+            except subprocess.CalledProcessError as e:
                 print(color("  ⚠️ GitHub MCP installation failed, continuing without it", Colors.YELLOW))
-                print(color("    You can set it up manually later with Docker", Colors.DIM))
+                print(color("    You can set it up manually later", Colors.DIM))
                 return False
         
         return False
