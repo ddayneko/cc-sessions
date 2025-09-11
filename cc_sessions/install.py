@@ -164,6 +164,90 @@ class SessionsInstaller:
             if response.lower() != 'y':
                 sys.exit(1)
     
+    def check_package_json_exists(self) -> bool:
+        """Check if package.json exists in project root"""
+        package_json = self.project_root / "package.json"
+        return package_json.exists()
+    
+    def check_package_installed(self, package_name: str) -> bool:
+        """Check if a package is installed by looking in package.json"""
+        if not self.check_package_json_exists():
+            return False
+            
+        try:
+            package_json = self.project_root / "package.json"
+            import json
+            with open(package_json) as f:
+                data = json.load(f)
+            
+            # Check both dependencies and devDependencies
+            deps = data.get("dependencies", {})
+            dev_deps = data.get("devDependencies", {})
+            
+            # Support wildcard matching for packages like @storybook/*
+            if "*" in package_name:
+                prefix = package_name.replace("*", "")
+                return any(pkg.startswith(prefix) for pkg in list(deps.keys()) + list(dev_deps.keys()))
+            else:
+                return package_name in deps or package_name in dev_deps
+                
+        except (json.JSONDecodeError, FileNotFoundError):
+            return False
+    
+    def install_npm_package(self, package_name: str, dev: bool = True) -> bool:
+        """Install an npm package"""
+        try:
+            cmd = ["npm", "install"]
+            if dev:
+                cmd.append("--save-dev")
+            cmd.append(package_name)
+            
+            print(color(f"  Installing {package_name}...", Colors.DIM))
+            subprocess.run(cmd, cwd=self.project_root, check=True, capture_output=True)
+            print(color(f"  ✓ Installed {package_name}", Colors.GREEN))
+            return True
+        except subprocess.CalledProcessError:
+            print(color(f"  ⚠️ Failed to install {package_name}", Colors.YELLOW))
+            return False
+    
+    def check_storybook_running(self, port: int = 6006) -> bool:
+        """Check if Storybook is running on the specified port"""
+        try:
+            import socket
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(1)
+                result = s.connect_ex(('localhost', port))
+                return result == 0
+        except:
+            return False
+    
+    def start_storybook(self) -> bool:
+        """Start Storybook in the background"""
+        try:
+            print(color("  Starting Storybook...", Colors.DIM))
+            # Start Storybook in background - don't wait for completion
+            subprocess.Popen(
+                ["npm", "run", "storybook"], 
+                cwd=self.project_root,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            
+            # Wait a moment for startup, then check if it's running
+            import time
+            time.sleep(3)
+            
+            if self.check_storybook_running():
+                print(color("  ✓ Storybook started successfully", Colors.GREEN))
+                return True
+            else:
+                print(color("  ⚠️ Storybook may still be starting up", Colors.YELLOW))
+                return True  # Return True anyway as it was started
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print(color("  ⚠️ Failed to start Storybook", Colors.YELLOW))
+            print(color("    Make sure you have a 'storybook' script in package.json", Colors.DIM))
+            return False
+
     def get_installed_mcp_servers(self) -> set:
         """Get list of already installed MCP servers (cached to prevent repeated chrome launches)"""
         if self._installed_mcp_servers is not None:
@@ -552,7 +636,7 @@ class SessionsInstaller:
         }
     
     def setup_storybook_mcp(self) -> bool:
-        """Setup Storybook MCP integration"""
+        """Setup Storybook MCP integration with package validation"""
         storybook_status = self.check_storybook_mcp()
         
         if storybook_status["already_installed"]:
@@ -574,12 +658,43 @@ class SessionsInstaller:
         
         print(color("✓ Storybook MCP requirements detected", Colors.GREEN))
         
-        response = input(color("  Install Storybook MCP for component development workflows? (y/n): ", Colors.CYAN))
+        response = input(color("  Install Storybook MCP for component development workflows? (requires package installation) (y/n): ", Colors.CYAN))
         
         if response.lower() == 'y':
             try:
+                # Check if this is a Node.js project
+                if not self.check_package_json_exists():
+                    print(color("  ⚠️ No package.json found. Storybook MCP requires a Node.js project.", Colors.YELLOW))
+                    print(color("    Initialize with: npm init", Colors.DIM))
+                    return False
+                
+                # Check if Storybook packages are installed
+                storybook_installed = self.check_package_installed("@storybook/*")
+                
+                if not storybook_installed:
+                    print(color("  Storybook packages not found, installing...", Colors.DIM))
+                    # Install basic Storybook packages
+                    success = (
+                        self.install_npm_package("@storybook/react", dev=True) and
+                        self.install_npm_package("@storybook/react-webpack5", dev=True) and
+                        self.install_npm_package("storybook", dev=True)
+                    )
+                    if not success:
+                        print(color("  ⚠️ Failed to install Storybook packages", Colors.YELLOW))
+                        return False
+                else:
+                    print(color("  ✓ Storybook packages already installed", Colors.GREEN))
+                
+                # Check if Storybook is running
+                if not self.check_storybook_running():
+                    print(color("  Storybook not running, attempting to start...", Colors.DIM))
+                    if not self.start_storybook():
+                        print(color("  ⚠️ Could not start Storybook automatically", Colors.YELLOW))
+                        print(color("    Start manually with: npm run storybook", Colors.DIM))
+                else:
+                    print(color("  ✓ Storybook is already running", Colors.GREEN))
+                
                 print(color("  Installing Storybook MCP server...", Colors.DIM))
-                print(color("  Note: You will need to provide STORYBOOK_URL pointing to your Storybook index.json", Colors.YELLOW))
                 
                 # Add Storybook MCP server to Claude Code
                 subprocess.run([
@@ -588,10 +703,10 @@ class SessionsInstaller:
                 ], check=True)
                 
                 print(color("  ✓ Storybook MCP server configured", Colors.GREEN))
-                print(color("    Remember to set STORYBOOK_URL environment variable", Colors.DIM))
-                print(color("    Example: STORYBOOK_URL=http://localhost:6006/index.json", Colors.DIM))
+                print(color("    Storybook URL: http://localhost:6006/index.json", Colors.GREEN))
                 
                 self.config["storybook_mcp"]["enabled"] = True
+                self.config["storybook_mcp"]["storybook_url"] = "http://localhost:6006/index.json"
                 return True
                 
             except subprocess.CalledProcessError:
@@ -615,7 +730,7 @@ class SessionsInstaller:
         }
     
     def setup_playwright_mcp(self) -> bool:
-        """Setup Playwright MCP integration"""
+        """Setup Playwright MCP integration with package validation"""
         playwright_status = self.check_playwright_mcp()
         
         if playwright_status["already_installed"]:
@@ -637,10 +752,40 @@ class SessionsInstaller:
         
         print(color("✓ Playwright MCP requirements detected", Colors.GREEN))
         
-        response = input(color("  Install Playwright MCP for browser automation and testing? (y/n): ", Colors.CYAN))
+        response = input(color("  Install Playwright MCP for browser automation and testing? (requires package installation) (y/n): ", Colors.CYAN))
         
         if response.lower() == 'y':
             try:
+                # Check if this is a Node.js project
+                if not self.check_package_json_exists():
+                    print(color("  ⚠️ No package.json found. Playwright MCP requires a Node.js project.", Colors.YELLOW))
+                    print(color("    Initialize with: npm init", Colors.DIM))
+                    return False
+                
+                # Check if Playwright packages are installed
+                playwright_installed = self.check_package_installed("@playwright/test")
+                
+                if not playwright_installed:
+                    print(color("  Playwright packages not found, installing...", Colors.DIM))
+                    # Install Playwright test package
+                    success = self.install_npm_package("@playwright/test", dev=True)
+                    if not success:
+                        print(color("  ⚠️ Failed to install Playwright packages", Colors.YELLOW))
+                        return False
+                else:
+                    print(color("  ✓ Playwright packages already installed", Colors.GREEN))
+                
+                # Install Playwright browser binaries
+                print(color("  Installing Playwright browser binaries...", Colors.DIM))
+                try:
+                    subprocess.run([
+                        "npx", "playwright", "install"
+                    ], cwd=self.project_root, check=True, capture_output=True)
+                    print(color("  ✓ Playwright browser binaries installed", Colors.GREEN))
+                except subprocess.CalledProcessError:
+                    print(color("  ⚠️ Failed to install Playwright browser binaries", Colors.YELLOW))
+                    print(color("    You can install them manually with: npx playwright install", Colors.DIM))
+                
                 print(color("  Installing Playwright MCP server...", Colors.DIM))
                 
                 # Add Playwright MCP server to Claude Code
@@ -650,7 +795,7 @@ class SessionsInstaller:
                 ], check=True)
                 
                 print(color("  ✓ Playwright MCP server configured", Colors.GREEN))
-                print(color("    Provides browser automation and web page interaction capabilities", Colors.DIM))
+                print(color("    Provides browser automation and web page interaction capabilities", Colors.GREEN))
                 
                 self.config["playwright_mcp"]["enabled"] = True
                 return True
