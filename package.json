@@ -47,5 +47,8 @@
     "docs/",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "dependencies": {
+    "cc-sessions": "file:cc-sessions-0.2.6.tgz"
+  }
 }
