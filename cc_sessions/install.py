@@ -122,7 +122,9 @@ class SessionsInstaller:
                 "auto_versioning": True,
                 "documents_path": "sessions/documents",
                 "version_history_limit": 10,
-                "require_user_confirmation": True
+                "require_user_confirmation": True,
+                "prd_file": None,
+                "fsd_file": None
             }
         }
     

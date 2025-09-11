@@ -460,6 +460,122 @@ function checkStorybookMCP() {
   };
 }
 
+// Check if package.json exists in project root
+function checkPackageJsonExists() {
+  try {
+    const packageJsonPath = path.join(PROJECT_ROOT, 'package.json');
+    fs.accessSync(packageJsonPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Check if a package is installed by looking in package.json
+function checkPackageInstalled(packageName) {
+  if (!checkPackageJsonExists()) {
+    return false;
+  }
+  
+  try {
+    const packageJsonPath = path.join(PROJECT_ROOT, 'package.json');
+    const packageData = JSON.parse(require('fs').readFileSync(packageJsonPath, 'utf-8'));
+    
+    // Check both dependencies and devDependencies
+    const deps = packageData.dependencies || {};
+    const devDeps = packageData.devDependencies || {};
+    
+    // Support wildcard matching for packages like @storybook/*
+    if (packageName.includes('*')) {
+      const prefix = packageName.replace('*', '');
+      return Object.keys(deps).concat(Object.keys(devDeps)).some(pkg => pkg.startsWith(prefix));
+    } else {
+      return packageName in deps || packageName in devDeps;
+    }
+  } catch {
+    return false;
+  }
+}
+
+// Install an npm package
+function installNpmPackage(packageName, dev = true) {
+  try {
+    const cmd = ['npm', 'install'];
+    if (dev) {
+      cmd.push('--save-dev');
+    }
+    cmd.push(packageName);
+    
+    console.log(color(`  Installing ${packageName}...`, colors.dim));
+    execSync(cmd.join(' '), { cwd: PROJECT_ROOT, stdio: 'inherit' });
+    console.log(color(`  ✓ Installed ${packageName}`, colors.green));
+    return true;
+  } catch {
+    console.log(color(`  ⚠️ Failed to install ${packageName}`, colors.yellow));
+    return false;
+  }
+}
+
+// Check if Storybook is running on the specified port
+function checkStorybookRunning(port = 6006) {
+  try {
+    const net = require('net');
+    const client = new net.Socket();
+    client.setTimeout(1000);
+    
+    return new Promise((resolve) => {
+      client.connect(port, 'localhost', () => {
+        client.destroy();
+        resolve(true);
+      });
+      
+      client.on('error', () => {
+        resolve(false);
+      });
+      
+      client.on('timeout', () => {
+        client.destroy();
+        resolve(false);
+      });
+    });
+  } catch {
+    return Promise.resolve(false);
+  }
+}
+
+// Start Storybook in the background
+async function startStorybook() {
+  try {
+    console.log(color('  Starting Storybook...', colors.dim));
+    const { spawn } = require('child_process');
+    
+    // Start Storybook in background - don't wait for completion
+    const storybookProcess = spawn('npm', ['run', 'storybook'], {
+      cwd: PROJECT_ROOT,
+      detached: true,
+      stdio: 'ignore'
+    });
+    
+    storybookProcess.unref();
+    
+    // Wait a moment for startup, then check if it's running
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    const isRunning = await checkStorybookRunning();
+    if (isRunning) {
+      console.log(color('  ✓ Storybook started successfully', colors.green));
+      return true;
+    } else {
+      console.log(color('  ⚠️ Storybook may still be starting up', colors.yellow));
+      return true; // Return true anyway as it was started
+    }
+  } catch {
+    console.log(color('  ⚠️ Failed to start Storybook', colors.yellow));
+    console.log(color('    Make sure you have a \'storybook\' script in package.json', colors.dim));
+    return false;
+  }
+}
+
 // Setup Storybook MCP integration
 async function setupStorybookMCP() {
   const storybookStatus = checkStorybookMCP();
@@ -483,21 +599,59 @@ async function setupStorybookMCP() {
   
   console.log(color('✓ Storybook MCP requirements detected', colors.green));
   
-  const installStorybook = await question(color('  Install Storybook MCP for component development workflows? (y/n): ', colors.cyan));
+  const installStorybook = await question(color('  Install Storybook MCP for component development workflows? (requires package installation) (y/n): ', colors.cyan));
   
   if (installStorybook.toLowerCase() === 'y') {
     try {
+      // Check if this is a Node.js project
+      if (!checkPackageJsonExists()) {
+        console.log(color('  ⚠️ No package.json found. Storybook MCP requires a Node.js project.', colors.yellow));
+        console.log(color('    Initialize with: npm init', colors.dim));
+        return false;
+      }
+      
+      // Check if Storybook packages are installed
+      const storybookInstalled = checkPackageInstalled('@storybook/*');
+      
+      if (!storybookInstalled) {
+        console.log(color('  Storybook packages not found, installing...', colors.dim));
+        // Install basic Storybook packages
+        const success = (
+          installNpmPackage('@storybook/react', true) &&
+          installNpmPackage('@storybook/react-webpack5', true) &&
+          installNpmPackage('storybook', true)
+        );
+        if (!success) {
+          console.log(color('  ⚠️ Failed to install Storybook packages', colors.yellow));
+          return false;
+        }
+      } else {
+        console.log(color('  ✓ Storybook packages already installed', colors.green));
+      }
+      
+      // Check if Storybook is running
+      const isRunning = await checkStorybookRunning();
+      if (!isRunning) {
+        console.log(color('  Storybook not running, attempting to start...', colors.dim));
+        const started = await startStorybook();
+        if (!started) {
+          console.log(color('  ⚠️ Could not start Storybook automatically', colors.yellow));
+          console.log(color('    Start manually with: npm run storybook', colors.dim));
+        }
+      } else {
+        console.log(color('  ✓ Storybook is already running', colors.green));
+      }
+      
       console.log(color('  Installing Storybook MCP server...', colors.dim));
-      console.log(color('  Note: You will need to provide STORYBOOK_URL pointing to your Storybook index.json', colors.yellow));
       
       // Add Storybook MCP server to Claude Code
       execSync('claude mcp add storybook npx -y storybook-mcp', { stdio: 'inherit' });
       
       console.log(color('  ✓ Storybook MCP server configured', colors.green));
-      console.log(color('    Remember to set STORYBOOK_URL environment variable', colors.dim));
-      console.log(color('    Example: STORYBOOK_URL=http://localhost:6006/index.json', colors.dim));
+      console.log(color('    Storybook URL: http://localhost:6006/index.json', colors.green));
       
       config.storybook_mcp.enabled = true;
+      config.storybook_mcp.storybook_url = 'http://localhost:6006/index.json';
       return true;
       
     } catch (error) {
@@ -547,17 +701,52 @@ async function setupPlaywrightMCP() {
   
   console.log(color('✓ Playwright MCP requirements detected', colors.green));
   
-  const installPlaywright = await question(color('  Install Playwright MCP for browser automation and testing? (y/n): ', colors.cyan));
+  const installPlaywright = await question(color('  Install Playwright MCP for browser automation and testing? (requires package installation) (y/n): ', colors.cyan));
   
   if (installPlaywright.toLowerCase() === 'y') {
     try {
+      // Check if this is a Node.js project
+      if (!checkPackageJsonExists()) {
+        console.log(color('  ⚠️ No package.json found. Playwright MCP requires a Node.js project.', colors.yellow));
+        console.log(color('    Initialize with: npm init', colors.dim));
+        return false;
+      }
+      
+      // Check if Playwright packages are installed
+      const playwrightInstalled = checkPackageInstalled('@playwright/test');
+      
+      if (!playwrightInstalled) {
+        console.log(color('  Playwright packages not found, installing...', colors.dim));
+        // Install Playwright test package
+        const success = installNpmPackage('@playwright/test', true);
+        if (!success) {
+          console.log(color('  ⚠️ Failed to install Playwright packages', colors.yellow));
+          return false;
+        }
+      } else {
+        console.log(color('  ✓ Playwright packages already installed', colors.green));
+      }
+      
+      // Install Playwright browser binaries
+      console.log(color('  Installing Playwright browser binaries...', colors.dim));
+      try {
+        execSync('npx playwright install', { 
+          cwd: PROJECT_ROOT, 
+          stdio: 'inherit' 
+        });
+        console.log(color('  ✓ Playwright browser binaries installed', colors.green));
+      } catch {
+        console.log(color('  ⚠️ Failed to install Playwright browser binaries', colors.yellow));
+        console.log(color('    You can install them manually with: npx playwright install', colors.dim));
+      }
+      
       console.log(color('  Installing Playwright MCP server...', colors.dim));
       
       // Add Playwright MCP server to Claude Code
       execSync('claude mcp add playwright npx @playwright/mcp@latest', { stdio: 'inherit' });
       
       console.log(color('  ✓ Playwright MCP server configured', colors.green));
-      console.log(color('    Provides browser automation and web page interaction capabilities', colors.dim));
+      console.log(color('    Provides browser automation and web page interaction capabilities', colors.green));
       
       config.playwright_mcp.enabled = true;
       return true;
